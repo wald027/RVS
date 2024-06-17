@@ -1,0 +1,11 @@
+name;value;desc
+EmailGIO;RVS.CGI2@realvidaseguros.onmicrosoft.com;Email Acesso GIO
+PasswordGIO;Piriquit0!;Password Acesso GIO
+LinkGIO;https://webcrm_qld.realvidaseguros.pt/;Link GIO QLD
+PathDriverEdge;realvidaseguros\lib\msedgedriver.exe;Path do Driver do Edge
+SQLExpressServer;PT-L162219\SQLEXPRESS;Servidor SQL Express
+Database;RealVidaSeguros;Database a conectar
+TableName;Emails_IPA_NLP;Nome da tabela
+MailboxName;brunofilipe.lobo@cgi.com;Nome da Mailbox a Usar (email)
+InboxFolder;RVS;Nome da pasta a ir buscar emails
+EmailsToMove;RVS_Em Tratamento;Nome da pasta a mover os emails depois de lidosS
