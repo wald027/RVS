@@ -1,2 +1,1 @@
-  if conn:
-        conn.close
+setup_logging(db)

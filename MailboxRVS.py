@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from readConfig import readConfig, queryByNameDict
 from databaseSQLExpress import *
 
-
+#eventualmente retirar isto e usar a db connection vinda do dispacther
 server = 'PT-L162219\SQLEXPRESS'
 database = 'RealVidaSeguros'
 dictConfig = readConfig()
@@ -28,11 +28,25 @@ def find_folder(parent_folder, folder_name):
             return folder
     return None
 
+def EmailWithRegra(mail,logger):
+    logger.info(f"Detetado Email com Regra vindo de: {mail.SenderEmailAddress}")
+    NumIF = mail.Subject.split("-")[0].replace("NIF","").replace(" ","")
+    if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10:
+        logger.info(f"NIF extraído com sucesso: {NumIF}")
+    for line in mail.Body.splitlines():
+        if line.find('Nome:')>-1:
+            Nome = line.split(':')[1].lower().title()
+            logger.info(f"Nome extraído com sucesso: {Nome}")
+            break
+    Body = mail.Body.split('Notas:')[1]
+    return Body, NumIF, Nome
+
+            
+
 def GetEmailsInbox(logger):
     current_Mailbox = InitEmailConn(logger)
     current_folder = find_folder(current_Mailbox, inbox_name)
     folder_toMove=find_folder(current_Mailbox,folder_toreview)
-    columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
     if current_folder:
         logger.info(f"Pasta Encontada: {current_folder.Name}")
         # Aceder aos emails
@@ -56,22 +70,35 @@ def GetEmailsInbox(logger):
                     break
             property_accessor = mail.PropertyAccessor
             message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
-            data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]        
+            for emailAddr in queryByNameDict("SenderEmailException",dictConfig).split('|'):
+                if emailAddr == mail.SenderEmailAddress:
+                    Body, NumIF, Nome = EmailWithRegra(mail,logger)
+                    columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
+                    data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,Body,Attachments,NumIF,Nome)]    
+                    break
+                else:
+                    data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
+                    columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
+
             logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
             try:
                 InsertDataBD(conn,tablename,columns,data)
                 logger.info("Email Enviado com Sucesso para a Base de Dados!")
+                columns =['Status','Reference','SpecificContent','Process']
+                data = [('NLP',message_id,'Teste','RVSIPA2024')]
+                InsertDataBD(conn,"QueueItem",columns,data)
+                if mail.Unread:
+                    mail.Unread=False
+                    mail.save()
+                mail.move(folder_toMove)
             except Exception as e:
                 logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
 #            if mail.attachments.Count > 0:
 #                print("Attachments: True")
 #            else:
 #                print("Attachments: False")
-            if mail.Unread:
-                mail.Unread=False
-                mail.save()
-            mail.move(folder_toMove)
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     if conn:
         conn.close
+

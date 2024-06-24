@@ -1,8 +1,6 @@
-from customLogging import setup_logging
-import logging
+emails = "Nome:|gisdoc@realvidaseguros"
 
-setup_logging()
-logger = logging.getLogger(__name__)
+print(emails.split("|")[0])
 
-logger.error("ola")
-logger.info("ASD")
+for email in emails.split("|"):
+    print(email.find("Nome:"))
