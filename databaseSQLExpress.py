@@ -1,4 +1,6 @@
 import pyodbc
+import pandas as pd
+import datetime
 
 def ConnectToBD(server, database):
     connection_string = (
@@ -30,3 +32,24 @@ def InsertDataBD(conn, table_name,columns,data):
     conn.commit()
     #print("Info Inserida!")
     cursor.close()
+
+def GetQueueItem(conn,column_names,QueueTable,InfoTable):
+    cursor = conn.cursor()
+    query = f"""
+            SELECT TOP(1) {', '.join(column_names)}
+            FROM {InfoTable} et
+            JOIN {QueueTable} st ON et.EmailID = st.Reference
+            WHERE st.Status = 'NLP FINISHED';
+        """
+    cursor.execute(query)
+    results = [list(row) for row in cursor.fetchall()]
+    df = pd.DataFrame(results,columns=column_names)
+
+    for i in df['EmailID']:
+        query = f"""
+                    UPDATE {QueueTable}
+                    Set Status = 'In Progress' , [Started Performer] = GETDATE()
+                    WHERE Reference = '{i}';
+                """ 
+        cursor.execute(query)
+    return df

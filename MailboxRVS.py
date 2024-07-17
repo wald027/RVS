@@ -31,14 +31,19 @@ def find_folder(parent_folder, folder_name):
 def EmailWithRegra(mail,logger):
     logger.info(f"Detetado Email com Regra vindo de: {mail.SenderEmailAddress}")
     NumIF = mail.Subject.split("-")[0].replace("NIF","").replace(" ","")
-    if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10:
+    if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10 and NumIF.isnumeric() == True:
         logger.info(f"NIF extraído com sucesso: {NumIF}")
+    else:
+        NumIF = ""
     for line in mail.Body.splitlines():
         if line.find('Nome:')>-1:
             Nome = line.split(':')[1].lower().title()
             logger.info(f"Nome extraído com sucesso: {Nome}")
             break
-    Body = mail.Body.split('Notas:')[1]
+    try:
+        Body = mail.Body.split('Notas:')[1]
+    except:
+        Body = mail.Body
     return Body, NumIF, Nome
 
             
@@ -79,7 +84,7 @@ def GetEmailsInbox(logger):
                 else:
                     data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
                     columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
-
+            print(mail.ConversationID)
             logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
             try:
                 InsertDataBD(conn,tablename,columns,data)
@@ -93,12 +98,7 @@ def GetEmailsInbox(logger):
                 mail.move(folder_toMove)
             except Exception as e:
                 logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
-#            if mail.attachments.Count > 0:
-#                print("Attachments: True")
-#            else:
-#                print("Attachments: False")
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     if conn:
         conn.close
-

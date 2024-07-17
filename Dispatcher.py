@@ -4,6 +4,25 @@ import MailboxRVS
 import logging
 import readConfig
 import time
+from main import EmailClassifier
+from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+
+NUM_LABELS = 11
+BASE_DIR = 'realvidaseguros/'
+TOKENIZER_PATH = BASE_DIR + "tokenizer"
+MODEL_PATH = BASE_DIR + "model"
+DATABASE = "RealVidaSeguros"
+STATUS_TABLE = "QueueItem"
+EMAIL_TABLE = "Emails_IPA_NLP"
+
+COLUMN_NAMES = [
+    'EmailRemetente','DataEmail', 'EmailID','Subject', 'Body', 'Anexos',
+    'NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes',
+    'DetalheMensagem', 'Mensagem', 'Estado'
+]
+server = 'PT-L162219\SQLEXPRESS'
+driver = 'ODBC Driver 17 for SQL Server'
+
 
 def main():
     #iniciar database, custom logger
@@ -19,12 +38,19 @@ def main():
         logger.info("Config Lida Com Sucesso!")
         MailboxRVS.GetEmailsInbox(logger)
         logger.info("Emails Extraídos com Sucesso!")
-        #Invoke NLP
+
+        ENGINE = create_engine(f"mssql+pyodbc://@{server}/{DATABASE}?driver={driver}&Trusted_Connection=yes")
+        CONN = ENGINE.connect()
+        
+        EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,logger,db).run()
+    
         time.sleep(5)
         logger.info("Dispatcher Terminado")
     except Exception as e:
         logger.error(f"Erro Dispatcher {e}")
-        db.close()
+    db.close()
 
 if __name__ == '__main__':
     main()
+
+    

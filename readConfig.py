@@ -1,5 +1,6 @@
 import csv
 import os.path
+import pandas as pd 
 
 def readConfig():
     # Path da Config
@@ -33,4 +34,12 @@ def queryByNameDict(name,dictConfig):
             if intCounter == len(dictConfig):
                 return None
             
-#readConfig()
+
+def readRegrasApolices():
+    file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'
+    if file_path:
+        dfRegras = pd.read_excel(file_path,keep_default_na=False)
+        return dfRegras
+    else:
+        print("Ficheiro de Regras de Apólice, não encontrado!")
+        return None
