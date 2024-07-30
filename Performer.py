@@ -31,13 +31,13 @@ def main():
             logger.error(f"Erro ao tentar is buscar QueueItem {e}")
         
         if not dfQueueItem.empty:
-            print(dfQueueItem)
+            logger.info(f'A tratar o registo com o EmailID/Reference {dfQueueItem["EmailID"].to_string().replace("0","").replace(" ","")} e com Intenção Identificada pelo NLP de {dfQueueItem["IDIntencao"].to_string().replace("0","").replace(" ","")}')
             try:
-                idAlertas(driver,dfQueueItem,"")
+                idAlertas(driver,dfQueueItem,"",logger)
             except BusinessRuleException as e:
                 logger.error(f"{e}")
             except Exception as e:
-                logger.error(f"SystemError no processamento do registo: {e}")
+                logger.error(f'SystemError no processamento do registo: {e}')
             
         else:
             logger.info("Sem QueueItems para tratar.")    

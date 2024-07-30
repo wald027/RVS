@@ -7,7 +7,7 @@ class BusinessRuleException(Exception):
         return f'{self.message}'
     pass
 
-
+"""
 try:
     raise Exception('Ola')
     raise BusinessRuleException('Teste')
@@ -15,3 +15,4 @@ except BusinessRuleException as e:
     print(e)
 except Exception as e :
     print(e)
+"""

@@ -1,16 +1,7 @@
-class BusinessRuleException(Exception):
-    """Base class for business rule exceptions"""
-    pass
+import pandas as pd
+from realvidaseguros import BusinessRuleExceptions
 
-class BusinessRuleExpection(BusinessRuleException):
-    """Raised when an invalid order amount is detected"""
-    def __init__(self,message):
-        self.message = f"Definição do Negócio: {message}" 
-        super().__init__(self.message)
+file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'
+dfRegrasApoliceAtivas = pd.read_excel(file_path,keep_default_na=False,sheet_name='ApolAtivas')
 
-    def __str__(self):
-        return f'{self.message}'
-
-
-
-raise BusinessRuleException(BusinessRuleException('Teste'))
+print(dfRegrasApoliceAtivas)

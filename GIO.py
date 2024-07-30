@@ -76,7 +76,7 @@ def pesquisarGIO(driver,search,pesquisa):
     time.sleep(10)
  
 
-def ScrapTableGIO(driver):
+def ScrapTableGIO(driver,logger) -> pd.DataFrame:
     pattern = r'\d+'
     NumRegistos = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[1]/div').text
     NumRegistos = re.findall(pattern,NumRegistos)
@@ -85,39 +85,42 @@ def ScrapTableGIO(driver):
     headers=['Nome','TipoEntidade','NIF','Phone','Email','DOB',' ']
     table_data = []
     #Extair Info 
-    while True:
-        rows = table.find_elements(By.TAG_NAME,'tr')
-        for row in rows:
-            cols = row.find_elements(By.TAG_NAME, 'td')
-            col_data = [col.text for col in cols]
-            table_data.append(col_data)
-        if not len(table_data) >= max(list(map(int, NumRegistos))):
-            driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[3]').click()
-            time.sleep(2)
-        else:
-            break
-    #Converter para dataframe
-    try:
+    if max(list(map(int, NumRegistos))) > 0:
+        while True:
+            rows = table.find_elements(By.TAG_NAME,'tr')
+            for row in rows:
+                cols = row.find_elements(By.TAG_NAME, 'td')
+                col_data = [col.text for col in cols]
+                table_data.append(col_data)
+                logger.info(f'A Extrair row com os dados: {col_data}')
+            if not len(table_data) >= max(list(map(int, NumRegistos))):
+                driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[3]').click()
+                time.sleep(2)
+            else:
+                break
         df=pd.DataFrame(table_data,columns=headers)
-    except:
+        logger.info('Extração efetuada com Sucesso!')
+    else:
         df = pd.DataFrame
-    print(df)
+        logger.info('Sem Dados a Extrair!')
     return df
 
 
 def ScrapDetalhesEntidadeGIO(driver):
-    Nome = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[1]/div[1]/div/input').get_attribute('value')
-    NumIF = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[2]/div/div[4]/input').get_attribute('value')
-    headers=['Nome','NIF']
-    df = pd.DataFrame([[Nome,NumIF]],columns=headers)
-    print(df)    
-    return df
+    #Nome = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[1]/div[1]/div/input').get_attribute('value')
+    #NumIF = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[2]/div/div[4]/input').get_attribute('value')
+    #headers=['Nome','NIF']
+    #df = pd.DataFrame([[Nome,NumIF]],columns=headers)
+    #print(df)
+    #Só isto????
+    Email = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[1]/div[5]/input').get_attribute('value')
+    return Email
 
-def ScrapApoliceGIO(driver):
+def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFrame:
     pattern = r'\d+'
     NumRegistos = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[3]/div[1]/div').text
     NumRegistos = re.findall(pattern,NumRegistos)
-    print(max(list(map(int, NumRegistos))))
+    logger.info(f'A tentar extrair as {max(list(map(int, NumRegistos)))} Apólices...')
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[1]/div[1]/div/label/select').click()
     time.sleep(2)
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[1]/div[1]/div/label/select/option[4]').click()
@@ -125,56 +128,273 @@ def ScrapApoliceGIO(driver):
     webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
     time.sleep(10)
     #Extrair Info
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/thead/tr/th[9]').click()
+    time.sleep(2)
+    while driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/thead/tr/th[9]').get_attribute('aria-sort') != 'descending':
+        print(driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/thead/tr/th[9]').get_attribute('aria-sort'))
+        driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/thead/tr/th[9]').click()
+        time.sleep(2)
+
+    time.sleep(10)
     table = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/tbody')
     rows = table.find_elements(By.TAG_NAME,'tr')
-    headers=['Nome','TipoEntidade','NIF','Phone','Email','DOB',' ']
+    headers=['Apolice','Versao','Produto','NomeTitular','1PessoaSegura','2PessoaSegura','Inicio','Termo','Situacao','']
     table_data = []
     #Extair Info 
-    while True:
-        rows = table.find_elements(By.TAG_NAME,'tr')
-        for row in rows:
-            cols = row.find_elements(By.TAG_NAME, 'td')
-            col_data = [col.text for col in cols]
-            table_data.append(col_data)
-        if not len(table_data) == max(list(map(int, NumRegistos))):
-            driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[3]/div[2]/div/ul/li[5]/a').click()
-            time.sleep(2)
-        else:
-            break
-    
+    if max(list(map(int, NumRegistos))) > 0:
+        while True:
+            rows = table.find_elements(By.TAG_NAME,'tr')
+            for row in rows:
+                cols = row.find_elements(By.TAG_NAME, 'td')
+                col_data = [col.text for col in cols]
+                logger.info(f'A Extrair row com os dados: {col_data}')
+                table_data.append(col_data)
+            if not len(table_data) == max(list(map(int, NumRegistos))):
+                driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[3]/div[2]/div/ul/li[5]/a').click()
+                time.sleep(5)
+            else:
+                break
+        df=pd.DataFrame(table_data,columns=headers)
+    else:
+        logger.info('Sem Dados para Extrair!')
+        df = pd.DataFrame
     #Converter para dataframe
-    #df=pd.DataFrame(table_data,columns=headers)
     #print(df)
-    pass
+    return df
 
-def idAlertas(driver,df:pd.DataFrame,regras):
-    
+def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> str:
+    CredorHipotecario =""
+    parent_div = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[3]/div[2]/div/div/div/div[1]/div[1]/div[3]')
+
+    child_divs = parent_div.find_elements(By.XPATH, './div')
+
+    for child_div in child_divs:
+        try:
+            label = child_div.find_element(By.TAG_NAME, 'label')
+            print(label)
+            CredorHipotecario = label.get_attribute('class')
+            print(f'Label class: {CredorHipotecario}')
+        except:
+            print('No label found in this div.')
+
+    return CredorHipotecario
+
+
+def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger:logging.Logger):
+    time.sleep(3)
     searchEmail = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[4]/input')
     searchName = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[1]/input')
     searchNIF = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[2]/input')
     searchApolc = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[5]/input')
-    for i, row in df.iterrows():
-        match row['IDIntencao']:
-            case 0:
-                pesquisarGIO(driver,searchEmail,row['EmailRemetente'])
-                df = ScrapTableGIO(driver)
-                print(df)
-            case 1:
-                pesquisarGIO(driver,searchEmail,row['EmailRemetente'])
-                df = ScrapTableGIO(driver)
-                if not df.empty:
-                    #raise bre
-                    break
-                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
-                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
-                pesquisarGIO(driver,searchNIF,row['NIF'])
-                df = ScrapTableGIO(driver)
-                print(df['TipoEntidade'].str.contains('T'))
-
-
-                print(df)
-    print("?")            
-    webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
-    webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+    file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'
+    auxfile_path= r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\classificacaoapolices.xlsx'
     
- 
+    dfRegras = pd.read_excel(file_path,keep_default_na=False,sheet_name='IdentifEntidade')
+
+    IDbd = dfInfoRegisto.loc[0,'IDIntencao']
+    
+    #Saber que Regras Ignorar (onde todas as columns são NA)
+    dfRegrasNA = dfRegras[dfRegras.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
+    #print(dfRegrasNA)
+
+
+    if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegras['ID'].values:
+        row = dfRegras.loc[dfRegras['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+    else:
+        raise BusinessRuleException("ID atribuido pelo NLP não configurado!")
+    logger.info(f'A utilizar a regra - {row.values}')
+    boolMatch = False
+
+    for index, row in row.iterrows():
+        for col in dfRegras.columns:
+            if not col == 'ID':
+                if row[col] == 'NA':
+                        logger.info(f'Regra para a coluna {col} não se aplica.')
+                else:
+                    match col:
+                        case 'Email':
+                            search = searchEmail
+                            pesquisa = dfInfoRegisto['EmailRemetente'].to_string()
+                        case 'NIF':
+                            search = searchNIF
+                            pesquisa = dfInfoRegisto['NIF'].to_string()
+                        case 'Nome':
+                            search = searchName
+                            pesquisa = dfInfoRegisto['Nome'].to_string()
+                        case 'Apólice':
+                            search = searchApolc
+                            pesquisa = dfInfoRegisto['Apolice'].to_string()
+                        case _:
+                            logger.info(f"Skipping Coluna {col}")
+                    logger.info(f'A Pesquisar no GIO por {col} o valor: {pesquisa.replace("0","").replace(" ","")}')
+                    pesquisarGIO(driver,search,pesquisa)
+                    dfGIO = ScrapTableGIO(driver,logger)
+                    #print(dfGIO['Tipo Entidade'])
+                    if not dfGIO.empty:
+                        if row[col] == 'Não':
+                            raise BusinessRuleException(f"A Pesquisa do Campo {col} retornou valores sendo que não é suposto. ID: {row['ID']} Regra: {row[col]}.")
+                        for value in row[col].split(";"):
+                            #print(value)
+                            if any(val == value for val in dfGIO['TipoEntidade'].values):
+                                for index,rowGIO in dfGIO['TipoEntidade'].items():
+                                    logger.info(f'A procurar Match entre {col} com o Tipo de Entidade extraído de {rowGIO} com a regra...')
+                                    if rowGIO == value:
+                                        boolMatch = True
+                                        logger.info(f'Match com Regra {col}, a regra diz {row[col].replace("0","").replace(" ","")} e o registo extraído tem {rowGIO.replace("0","").replace(" ","")}')
+                                        colunaMatch = col
+                                        if index >= 100:
+                                            index = index-100                                        
+                                        driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[2]/div/table/tbody/tr[{index+1}]/td[7]/div').click()
+                                        break
+                                break
+                    """
+                    else:
+                    
+                        if not row[col] == 'Não':
+                            raise BusinessRuleException("Sem Match Para Nenhuma Regra")
+                    """     
+            if boolMatch:
+                    break
+            else:
+                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+        
+
+    if not boolMatch and not any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'].values):
+        raise BusinessRuleException("Sem Match Para Nenhuma Regra")
+
+    #Identifacao Alternativa para casos de clientes sem emails registados/vazios
+
+    dfRegrasIdentifAltern = pd.read_excel(file_path,keep_default_na=False,sheet_name='IdentifAlternativa') 
+    if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasIdentifAltern[dfRegrasIdentifAltern.drop(columns='ID').map(lambda x: x == 'Sim').all(axis=1)].values:
+        dfRegrasSIM = dfRegrasIdentifAltern[dfRegrasIdentifAltern.drop(columns='ID').map(lambda x: x == 'Sim').all(axis=1)]
+        row = dfRegrasSIM.loc[dfRegrasSIM['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+        for col in dfRegrasSIM.columns:
+            if col == colunaMatch and row[col].values == 'Sim':
+                time.sleep(5)
+                EmailCliente = ScrapDetalhesEntidadeGIO(driver)
+                #print(EmailCliente=='')
+                #print(EmailCliente==' ')
+                #print(EmailCliente=='x@x.pt')
+                if not EmailCliente == '' and not EmailCliente == 'x@x.pt': #colocar config email/emails permitidos
+                    raise BusinessRuleException(f'Registo contém um email: {EmailCliente}, de acordo com a Regra tem de ser @realvida ou vazio.')
+    
+    dfRegrasApoliceAtivas = pd.read_excel(file_path,keep_default_na=False,sheet_name='ApolAtivas')
+    if not dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and boolMatch:
+        rowAnalise = dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: (x !='NA')).any(axis=1)].loc[dfRegrasApoliceAtivas['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+        driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[4]').click()
+        time.sleep(5)
+        dfApolicesAtivas = ScrapApoliceGIO(driver,logger)
+        dfApolicesAtivas =dfApolicesAtivas[dfApolicesAtivas.map(lambda row: row == 'EM VIGOR').any(axis=1)]
+        if dfApolicesAtivas.empty or dfApolicesAtivas[dfApolicesAtivas.map(lambda row: row == 'EM VIGOR').any(axis=1)].empty :
+            raise BusinessRuleException('Sem Apolices Ativas')
+        logger.info(f"A Proceder com Verificação às Apolices Ativas com a Regra {rowAnalise.values}")
+        #print(dfApolicesAtivas)
+        dfClassicaoApolices = pd.read_excel(auxfile_path,keep_default_na=False,sheet_name='Classificação Produtos')
+        dfApolicesAtivas['ApoliceVersao'] = dfApolicesAtivas.apply(lambda row: row['Apolice'].split('-')[0] +'/'+row['Versao'], axis=1)
+        dfClassicaoApolices['ApoliceVersao'] = dfClassicaoApolices.apply(lambda row:str(row['MODALIDADE']) + '/' + str(row['VERSAO']),axis=1)
+        logger.info(f"A Aplicar Regras para as Apolices/Versões: {dfApolicesAtivas['ApoliceVersao'].values}")
+
+        listMatches = []
+    
+        for i, row in rowAnalise.iterrows():
+            for col in rowAnalise.drop(columns='ID').columns:
+                if row[col] == 'NA':
+                    logger.info(f'Não existe Regra Definida para {col}')
+                else:
+                    boolMatch =False
+                    logger.info(f'A analisar a Regra de {col}')
+                    match col:
+                        case 'Modalidade/Versão Em Vigor':
+                            if not row[col] == 'Todos':
+                                for RegraModalidadeVersao in row[col].split('ou'):
+                                    #print(RegraModalidadeVersao)
+                                    if 'X' in RegraModalidadeVersao.split('/')[0]:
+                                        for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']:
+                                            if RegraModalidadeVersao.split('/')[1] == ApoliceVersao.split('/')[1]:
+                                                #print("Existe Match")
+                                                boolMatch = True
+                                                listMatches.append(ApoliceVersao)
+                                                #break
+                                    elif 'X' in RegraModalidadeVersao.split('/')[1]:
+                                        for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']:
+                                            if RegraModalidadeVersao.split('/')[0] == ApoliceVersao.split('/')[0]:
+                                                #print("existe")
+                                                boolMatch = True
+                                                listMatches.append(ApoliceVersao)
+                                                #break
+                                    elif any(RegraModalidadeVersao == ApoliceVersao for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
+                                        for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']:
+                                            if RegraModalidadeVersao == ApoliceVersao:
+                                                #print("existe")
+                                                boolMatch = True
+                                                listMatches.append(ApoliceVersao)
+                                                #break
+                                if not boolMatch:
+                                    raise BusinessRuleException('Sem Match Com Regra')
+                                logger.info(f'Match com a Regra nas Apolices/Versões {listMatches}')
+                            elif dfApolicesAtivas.empty:
+                                raise BusinessRuleException('Sem Match Com Regra')
+                            #break
+                        case 'Limitação de Modalidade/Versão':
+                            if not row[col] == 'Todos':
+                                for RegraModalidadeVersao in row[col].split('ou'):
+                                    #print(RegraModalidadeVersao)
+                                    if 'X' in RegraModalidadeVersao.split('/')[0]:
+                                        if any(RegraModalidadeVersao.split('/')[1] == ApoliceVersao.split('/')[1] for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
+                                            raise BusinessRuleException("")
+                                    elif 'X' in RegraModalidadeVersao.split('/')[1]:
+                                        if any(RegraModalidadeVersao.split('/')[0] == ApoliceVersao.split('/')[0] for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
+                                            raise BusinessRuleException("")
+                                    elif any(RegraModalidadeVersao == ApoliceVersao for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
+                                            raise BusinessRuleException("")
+                            elif not dfApolicesAtivas[~dfApolicesAtivas['ApoliceVersao'].isin(listMatches)].empty:
+                                raise BusinessRuleException('Sem Match Com Regra')
+                            boolMatch=True
+                            logger.info("Nenhuma Apolice/Versão Impeditiva Detetada!")
+                        case 'Produto Em Vigor':
+                            if row[col] == 'Todos':
+                                if dfApolicesAtivas.empty:
+                                    raise BusinessRuleException("Sem Match Com Regra")
+                                boolMatch=True
+                                logger.info(f'Match uma vez que tem Produtos Ativos')
+                            else:
+                                for produto in row[col].split(';'):
+                                    for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']:
+                                        if ApoliceVersao in dfClassicaoApolices['ApoliceVersao'].values:
+                                            for i,ApoliceVersaoClass in dfClassicaoApolices.iterrows():
+                                                if ApoliceVersaoClass['ApoliceVersao'] == ApoliceVersao and produto == ApoliceVersaoClass['PRODUTO']:
+                                                    logger.info(f'Match com o produto da Apolice/Versao {ApoliceVersao}, existindo o produto do tipo {produto}')
+                                                    boolMatch = True
+                                                    break
+                                if not boolMatch:
+                                    raise BusinessRuleException("Sem Match com Regra")
+                        case 'Produto Impeditivo Em Vigor':
+                            if row[col] == 'Todos':
+                                if not dfApolicesAtivas.empty:
+                                    raise BusinessRuleException("Sem Match com Regra")
+                                boolMatch =True
+                                logger.info('Match uma vez que NÃO tem Produtos Ativos')
+                            else:
+                                for produto in row[col].split(';'):
+                                    for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']:
+                                        if ApoliceVersao in dfClassicaoApolices['ApoliceVersao'].values:
+                                            for i,ApoliceVersaoClass in dfClassicaoApolices.iterrows():
+                                                if ApoliceVersaoClass['ApoliceVersao'] == ApoliceVersao and produto == ApoliceVersaoClass['PRODUTO']:
+                                                    logger.info(f'Match com o produto da Apolice/Versao {ApoliceVersao}, existindo o produto do tipo {produto}')
+                                                    raise BusinessRuleException("Sem Match com Regra")
+                                logger.info("Nenhum Produto Impeditivo Detetado!")
+                                boolMatch=True
+                        case 'Credor Hipotecário':
+                            print("Fazer Pesquisa")
+                            for i, row in dfApolicesAtivas.iterrows():
+                                print(i)
+                                driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/tbody/tr[{i+1}]/td[10]/div/a').click()
+                                break
+                            print(GetInfoCredorHipotecario(driver,logger))
+                        case _:
+                            print(f'{col} ainda não configurado')
+
+
+    #atividade final
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[1]/div[6]/button').click()
