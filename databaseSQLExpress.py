@@ -53,3 +53,12 @@ def GetQueueItem(conn,column_names,QueueTable,InfoTable):
                 """ 
         cursor.execute(query)
     return df
+
+def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,column_names,QueueTable,InfoTable):
+    cursor = conn.cursor()
+    for i in df['EmailID']:
+        query = f"""
+                    Update{QueueTable}
+                    Set Status = 'Success', [Ended Performer] = GETDATE(),
+                    WHERE Reference = '{i}';
+                """

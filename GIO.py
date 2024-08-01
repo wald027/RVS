@@ -12,6 +12,7 @@ import logging
 import pandas as pd 
 import re
 from BusinessRuleExceptions import *
+import win32com.client
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"
 
@@ -162,22 +163,90 @@ def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFra
     #print(df)
     return df
 
+def send_email(subject, body, to,label_id,cc=None, attachments=None):
+    outlook = win32com.client.Dispatch('outlook.application')
+
+    mail = outlook.CreateItem(0)
+    mail.Subject = subject
+    mail.Body = body
+    mail.To = to
+    if cc:
+        mail.CC = cc
+    if label_id:
+        mail.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/ClassificationGuid", label_id)
+    if attachments:
+        for attachment in attachments:
+            mail.Attachments.Add(attachment)
+    try:
+        mail.Send()
+        print("Email enviado com Sucesso")
+    except Exception as e:
+        print(f'Erro enviar Email {e}')
+    
+
 def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> str:
     CredorHipotecario =""
     parent_div = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[3]/div[2]/div/div/div/div[1]/div[1]/div[3]')
-
     child_divs = parent_div.find_elements(By.XPATH, './div')
-
+    i= 1
     for child_div in child_divs:
-        try:
-            label = child_div.find_element(By.TAG_NAME, 'label')
-            print(label)
-            CredorHipotecario = label.get_attribute('class')
-            print(f'Label class: {CredorHipotecario}')
-        except:
-            print('No label found in this div.')
-
+            try:
+                label = child_div.find_element(By.TAG_NAME, 'label')
+                label_text = label.text
+                #print(f'Label text: {label_text}')
+                if label_text == 'Credor Hipotecário:':
+                    CredorHipotecario = driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[3]/div[2]/div/div/div/div[1]/div[1]/div[3]/div[{i}]/label[2]').text
+                    logger.info(f'Identificado {label_text} - {CredorHipotecario}')
+            except:
+                print('No label found in this div.') 
+            i=i+1
     return CredorHipotecario
+
+def send_email(subject, body, to,label_id,cc=None, attachments=None):
+    outlook = win32com.client.Dispatch('outlook.application')
+    print(body)
+    mail = outlook.CreateItem(0)
+    mail.Subject = subject
+    mail.Body = body
+    mail.To = to
+    if cc:
+        mail.CC = cc
+    if label_id:
+        mail.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/ClassificationGuid", label_id)
+    if attachments:
+        for attachment in attachments:
+            mail.Attachments.Add(attachment)
+    try:
+        mail.Send()
+        print("Email enviado com Sucesso")
+    except Exception as e:
+        print(f'Erro enviar Email {e}')
+
+def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.DataFrame):
+    logger.info('A Proceder com o Registo do Contacto com o Cliente no GIO')
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[1]').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[10]/span/span[1]/span/span[1]/span').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[6]').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[11]/span/span[1]/span/span[1]/span').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[2]').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[9]/span/span[1]/span/span[1]/span').click()
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[1]').click()
+    time.sleep(5)
+    desc = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[16]/textarea')
+    desc.clear()
+    textodesc = 'Assunto do Email: Corpo do Email: Tema NLP: Template Resposta Enviado: '
+    desc.send_keys(textodesc)
+    time.sleep(5)
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[7]/div/button[2]').click()
+    time.sleep(3)
+
+
 
 
 def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger:logging.Logger):
@@ -279,6 +348,7 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
                 if not EmailCliente == '' and not EmailCliente == 'x@x.pt': #colocar config email/emails permitidos
                     raise BusinessRuleException(f'Registo contém um email: {EmailCliente}, de acordo com a Regra tem de ser @realvida ou vazio.')
     
+    #Verificação de Apolices Ativas (Caso necessário)
     dfRegrasApoliceAtivas = pd.read_excel(file_path,keep_default_na=False,sheet_name='ApolAtivas')
     if not dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and boolMatch:
         rowAnalise = dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: (x !='NA')).any(axis=1)].loc[dfRegrasApoliceAtivas['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
@@ -386,15 +456,29 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
                                 logger.info("Nenhum Produto Impeditivo Detetado!")
                                 boolMatch=True
                         case 'Credor Hipotecário':
-                            print("Fazer Pesquisa")
-                            for i, row in dfApolicesAtivas.iterrows():
-                                print(i)
+                            print(f"A verificar {col} das Apolices Ativas")
+                            for i, rowAA in dfApolicesAtivas.iterrows():
                                 driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[2]/div/table/tbody/tr[{i+1}]/td[10]/div/a').click()
                                 break
-                            print(GetInfoCredorHipotecario(driver,logger))
+                            CredorHipotecario = GetInfoCredorHipotecario(driver,logger)
+                            print(CredorHipotecario)
+                            if row[col] == 'Sim':
+                                if CredorHipotecario == '' or CredorHipotecario == None:
+                                    raise BusinessRuleException("Sem Match com a Regra")
+                            if row[col] == 'Não':
+                                if not CredorHipotecario == '' or not CredorHipotecario == None:
+                                    raise BusinessRuleException("Sem Match com a Regra")
+                            boolMatch=True
+                            logger.info(f'{col} em conformidade com a Regra')
                         case _:
                             print(f'{col} ainda não configurado')
 
+    if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and not boolMatch:
+        raise BusinessRuleException('Sem Match com a Regra')
+    
+    #send_email()
+
+    registarcontactoGIO(driver,logger,dfInfoRegisto)
 
     #atividade final
-    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[1]/div[6]/button').click()
+    driver.find_element(By.ID,'deleteData').click()

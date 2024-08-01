@@ -12,7 +12,7 @@ def main():
     server = queryByNameDict('SQLExpressServer',dictConfig)
     database = queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
-    setup_logging(db)
+    setup_logging(db,'LOGS')
     logger = logging.getLogger(__name__)
     logger.info("A Iniciar Performer.....")
     #driver = OpenGIO(logger)
@@ -24,7 +24,7 @@ def main():
         logger.error(f"Erro ao iniciar Aplicações {e}")
         raise e
     while True:
-        dfQueueItem = pd.DataFrame
+        dfQueueItem:pd.DataFrame
         try:
             dfQueueItem = databaseSQLExpress.GetQueueItem(db,COLUMN_NAMES,"QueueItem","Emails_IPA_NLP")
         except Exception as e:
@@ -34,6 +34,7 @@ def main():
             logger.info(f'A tratar o registo com o EmailID/Reference {dfQueueItem["EmailID"].to_string().replace("0","").replace(" ","")} e com Intenção Identificada pelo NLP de {dfQueueItem["IDIntencao"].to_string().replace("0","").replace(" ","")}')
             try:
                 idAlertas(driver,dfQueueItem,"",logger)
+                
             except BusinessRuleException as e:
                 logger.error(f"{e}")
             except Exception as e:

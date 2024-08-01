@@ -20,8 +20,6 @@ COLUMN_NAMES = [
     'NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes',
     'DetalheMensagem', 'Mensagem', 'Estado'
 ]
-server = 'PT-L162219\SQLEXPRESS'
-driver = 'ODBC Driver 17 for SQL Server'
 
 
 def main():
@@ -30,13 +28,17 @@ def main():
     server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
     database = readConfig.queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
-    setup_logging(db)
+    driver = readConfig.queryByNameDict('SQLDriver',dictConfig)
+    databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
+
+
+    setup_logging(db,databaseLogsTable)
     try:
         logger = logging.getLogger(__name__)
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
         time.sleep(1)
         logger.info("Config Lida Com Sucesso!")
-        MailboxRVS.GetEmailsInbox(logger)
+        MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
         logger.info("Emails Extraídos com Sucesso!")
 
         ENGINE = create_engine(f"mssql+pyodbc://@{server}/{DATABASE}?driver={driver}&Trusted_Connection=yes")
