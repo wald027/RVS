@@ -9,7 +9,7 @@ TableName;Emails_IPA_NLP;Nome da tabela
 MailboxName;brunofilipe.lobo@cgi.com;Nome da Mailbox a Usar (email)
 InboxFolder;RVS;Nome da pasta a ir buscar emails
 EmailsToMove;RVS_Em Tratamento;Nome da pasta a mover os emails depois de lidos
-SenderEmailException;noreply@realvidaseguros.pt|gisdoc@realvidaseguros.pt|noreply2@realvidaseguros.pt;Emails de excepção onde o dispatcher extrai automaticamente o NIF e Nome do Cliente
+SenderEmailException;"""Real Vida Seguros"" <noreply@realvidaseguros.pt>|Real Vida Seguros <noreply@realvidaseguros.pt>|""RV - Formul�rio Contactos"" <noreply@realvidaseguros.pt>|RV - Formul�rio Contactos <noreply2@realvidaseguros.pt>|""Real Vida Seguros"" <gisdoc@realvidaseguros.pt>";Emails de excepção onde o dispatcher extrai automaticamente o NIF e Nome do Cliente
 QueueTableName;QueueItem;Nome tabela Queue
 LogsTableName;LOGS;Nome tabela Logs
 SQLDriver;ODBC Driver 17 for SQL Server;

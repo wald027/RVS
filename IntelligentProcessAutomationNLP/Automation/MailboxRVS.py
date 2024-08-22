@@ -28,7 +28,8 @@ def find_folder(parent_folder, folder_name):
 
 def EmailWithRegra(mail,logger):
     Body= ''
-    logger.info(f"Detetado Email com Regra vindo de: {mail.SenderEmailAddress}")
+    Subject = ''
+    logger.info(f"Detetado Email com Regra vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
     NumIF = mail.Subject.split("-")[0].replace("NIF","").replace(" ","")
     if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10 and NumIF.isnumeric() == True:
         logger.info(f"NIF extraído com sucesso: {NumIF}")
@@ -92,7 +93,7 @@ def GetEmailsInbox(logger,conn,dictConfig):
             property_accessor = mail.PropertyAccessor
             message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
             for emailAddr in queryByNameDict("SenderEmailException",dictConfig).split('|'):
-                if emailAddr == mail.SenderEmailAddress:
+                if emailAddr == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
                     Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
                     columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
                     data = [(Email,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
@@ -115,6 +116,7 @@ def GetEmailsInbox(logger,conn,dictConfig):
                 mail.move(folder_toMove)
             except Exception as e:
                 logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
+        return messages.count
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     #if conn:

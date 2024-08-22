@@ -22,7 +22,7 @@ COLUMN_NAMES = [
 ]
 
 
-def NLP():
+def main():
     #iniciar database, custom logger
     dictConfig = readConfig.readConfig()
     server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
@@ -38,14 +38,14 @@ def NLP():
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
         time.sleep(1)
         logger.info("Config Lida Com Sucesso!")
-        MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
-        logger.info("Emails Extraídos com Sucesso!")
-
-        ENGINE = create_engine(f"mssql+pyodbc://@{server}/{DATABASE}?driver={driver}&Trusted_Connection=yes")
-        CONN = ENGINE.connect()
-        
-        EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,logger,db).run()
-    
+        mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
+        if mailcount > 0:
+            logger.info("Emails Extraídos com Sucesso!")
+            ENGINE = create_engine(f"mssql+pyodbc://@{server}/{DATABASE}?driver={driver}&Trusted_Connection=yes")
+            CONN = ENGINE.connect()
+            EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,logger,db).run()
+        else:
+            logger.warning('Sem Emails para Tratamento!')  
         time.sleep(5)
         logger.info("Dispatcher Terminado")
     except Exception as e:
@@ -53,6 +53,6 @@ def NLP():
     db.close()
 
 if __name__ == '__main__':
-    NLP()
+    main()
 
     
