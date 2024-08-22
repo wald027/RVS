@@ -5,13 +5,11 @@ from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 import time
-from readConfig import readConfig,queryByNameDict
-from customLogging import setup_logging
-import databaseSQLExpress
+from customScripts.readConfig import queryByNameDict
 import logging
 import pandas as pd 
 import re
-from BusinessRuleExceptions import *
+from Automation.BusinessRuleExceptions import *
 import win32com.client
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"

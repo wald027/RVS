@@ -2,6 +2,24 @@ import csv
 import os.path
 import pandas as pd 
 
+
+def readConfig():
+    configPath = r'C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx'
+    if os.path.isfile(configPath):
+        dictConfig:pd.DataFrame
+        dictConfig =pd.read_excel(configPath,keep_default_na=False,sheet_name='Sheet1') 
+        return dictConfig
+    else:
+        print("Ficheiro Config não encontrado!")
+
+def queryByNameDict(name,dictConfig:pd.DataFrame):
+    for index,row in dictConfig.iterrows():
+        if row['name'] == name:
+            return row['value']
+    return None
+
+
+""""
 def readConfig():
     # Path da Config
     csv_file_path = r'realvidaseguros\Config.csv'
@@ -23,7 +41,9 @@ def readConfig():
         return dictConfig
     else:
         print("Ficheiro de Configuração não encontrado!")
+"""
 
+""""
 def queryByNameDict(name,dictConfig):
     intCounter = 0
     for row in dictConfig:
@@ -33,7 +53,7 @@ def queryByNameDict(name,dictConfig):
         else:
             if intCounter == len(dictConfig):
                 return None
-            
+"""            
 #Apagar
 def readRegrasApolices():
     file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'

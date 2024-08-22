@@ -1,7 +1,8 @@
-from GIO import *
-from readConfig import *
-import databaseSQLExpress
-from BusinessRuleExceptions import *
+from Automation.GIO import *
+from customScripts.readConfig import *
+import customScripts.databaseSQLExpress as databaseSQLExpress
+from Automation.BusinessRuleExceptions import BusinessRuleException
+from customScripts.customLogging import setup_logging
 
 COLUMN_NAMES = [
     'EmailRemetente','Anexos','EmailID','Subject','Body',
@@ -36,7 +37,7 @@ def main():
         if not dfQueueItem.empty:
             logger.info(f'A tratar o registo com o EmailID/Reference {dfQueueItem["EmailID"].to_string().replace("0","").replace(" ","")} e com Intenção Identificada pelo NLP de {dfQueueItem["IDIntencao"].to_string().replace("0","").replace(" ","")}')
             try:
-                if dfQueueItem.loc[0,'Score'] < float(queryByNameDict('TrustScore',dictConfig).replace(',','.')):
+                if dfQueueItem.loc[0,'Score'] < queryByNameDict('TrustScore',dictConfig):
                     raise BusinessRuleException(f'Score de {dfQueueItem.loc[0,"Score"]*100}% de Confiança Abaixo do Permitido')
                 IDbd = dfQueueItem.loc[0,'IDIntencao']
                 idAlertas(driver,dfQueueItem,dictConfig,logger)
@@ -68,7 +69,7 @@ def main():
 def InitApplications():
     Browser_options = Options()
     Browser_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-    Path= r"realvidaseguros\lib\chromedriver.exe"
+    Path= r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\IntelligentProcessAutomationNLP\Automation\lib\chromedriver.exe"
     driver = webdriver.Chrome(service=Service(Path),options=Browser_options)
     return driver
 
