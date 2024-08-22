@@ -16,9 +16,10 @@ import win32com.client
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"
 
-dictConfig = readConfig()
+#TO-DO - Colocar Try Catch nas ações que podem ser systemError(seletores) para enviar logs com a origem do erro (nome funçao e ficheiro)
 
-def OpenGIO(logger):
+#Abrir GIO (parte ainda não desenvolvida por diferenças de ambiente)
+def OpenGIO(logger:logging.Logger,dictConfig):
     #Path = queryByNameDict('PathDriverEdge',dictConfig)
     Browser_options = Options()
     Browser_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
@@ -35,8 +36,8 @@ def OpenGIO(logger):
     except Exception as e:
         logger.error(f"Website indisponível {e}")
 
-
-def loginGIO(driver):
+#LoginGIO (parte ainda não desenvolvida por diferenças de ambiente)
+def loginGIO(driver:webdriver.Chrome,dictConfig):
     search = driver.find_element_by_id("otherTileText")
     search.click()
     time.sleep(5)
@@ -51,13 +52,14 @@ def loginGIO(driver):
     time.sleep(15)
     SMS=input("Carregar Enter Após Login Efetuado: ")
 
-def navegarGIO(driver):
+#Navega para a página de pesquisa (tambem não utilizado ainda)
+def navegarGIO(driver:webdriver.Chrome):
     print(driver.title)
     search = driver.find_element(By.XPATH,'/html/body/div[2]/nav/div/ul/li[3]/a')
     search.click()
  
-
-def pesquisarGIO(driver,search,pesquisa):
+#Faz a pesquisa pelo driver que lhe enviarmos (driver as in Nome, Apolice, NIF e Email))
+def pesquisarGIO(driver:webdriver.Chrome,search,pesquisa:str):
     print(driver.title)
     searchButton = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[6]/div/button[1]')
     driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[6]/div/button[2]').click()
@@ -76,8 +78,8 @@ def pesquisarGIO(driver,search,pesquisa):
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[1]/div/h2').click
     time.sleep(10)
  
-
-def ScrapTableGIO(driver,logger) -> pd.DataFrame:
+#Extrai todos os registos da tabela de pesquisa do GIO, se houve mais que uma página ele extrai
+def ScrapTableGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFrame:
     pattern = r'\d+'
     NumRegistos = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[1]/div').text
     NumRegistos = re.findall(pattern,NumRegistos)
@@ -86,14 +88,18 @@ def ScrapTableGIO(driver,logger) -> pd.DataFrame:
     headers=['Nome','TipoEntidade','NIF','Phone','Email','DOB',' ']
     table_data = []
     #Extair Info 
+    #Se não houver registos a extrair, ou seja, 0 registos apresentados irá retornar uma dataframe vazia
     if max(list(map(int, NumRegistos))) > 0:
         while True:
+            #'tr' equivale a uma row
             rows = table.find_elements(By.TAG_NAME,'tr')
             for row in rows:
+                #'td' equivale à coluna dessa row
                 cols = row.find_elements(By.TAG_NAME, 'td')
                 col_data = [col.text for col in cols]
                 table_data.append(col_data)
                 logger.info(f'A Extrair row com os dados: {col_data}')
+            #enquanto não extrair TUDO vai carregar no botão de next
             if not len(table_data) >= max(list(map(int, NumRegistos))):
                 driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[3]').click()
                 time.sleep(2)
@@ -106,8 +112,8 @@ def ScrapTableGIO(driver,logger) -> pd.DataFrame:
         logger.info('Sem Dados a Extrair!')
     return df
 
-
-def ScrapDetalhesEntidadeGIO(driver):
+#Extrai o Email depois de entrar na entidade (Util apenas para a regra que tem de verificar se o email é vazio ou realvida)
+def ScrapDetalhesEntidadeGIO(driver:webdriver.Chrome) -> str:
     #Nome = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[1]/div[1]/div/input').get_attribute('value')
     #NumIF = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[2]/div/div/div/div/form/div/fieldset[2]/div/div[4]/input').get_attribute('value')
     #headers=['Nome','NIF']
@@ -116,7 +122,7 @@ def ScrapDetalhesEntidadeGIO(driver):
     #Só isto????
     Email = driver.find_element(By.XPATH, '/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[1]/div[5]/input').get_attribute('value')
     return Email
-
+#Extrai as Apolices TODAS apresentas para o cliente (ativas e inativas)
 def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFrame:
     pattern = r'\d+'
     NumRegistos = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[3]/div[1]/div').text
@@ -142,6 +148,7 @@ def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFra
     headers=['Apolice','Versao','Produto','NomeTitular','1PessoaSegura','2PessoaSegura','Inicio','Termo','Situacao','']
     table_data = []
     #Extair Info 
+    #tr - rows / td - columns logica: a cada tr extrair todos os td
     if max(list(map(int, NumRegistos))) > 0:
         while True:
             rows = table.find_elements(By.TAG_NAME,'tr')
@@ -162,26 +169,6 @@ def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFra
     #Converter para dataframe
     #print(df)
     return df
-
-def send_email(subject, body, to,label_id,cc=None, attachments=None):
-    outlook = win32com.client.Dispatch('outlook.application')
-
-    mail = outlook.CreateItem(0)
-    mail.Subject = subject
-    mail.Body = body
-    mail.To = to
-    if cc:
-        mail.CC = cc
-    if label_id:
-        mail.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/ClassificationGuid", label_id)
-    if attachments:
-        for attachment in attachments:
-            mail.Attachments.Add(attachment)
-    try:
-        mail.Send()
-        print("Email enviado com Sucesso")
-    except Exception as e:
-        print(f'Erro enviar Email {e}')
     
 
 def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> str:
@@ -202,6 +189,7 @@ def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> s
             i=i+1
     return CredorHipotecario
 
+#Não terminado/implementado devido a dúvidas do ambiente produtivo
 def send_email(subject, body, to,label_id,cc=None, attachments=None):
     outlook = win32com.client.Dispatch('outlook.application')
     print(body)
@@ -222,45 +210,52 @@ def send_email(subject, body, to,label_id,cc=None, attachments=None):
     except Exception as e:
         print(f'Erro enviar Email {e}')
 
-def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.DataFrame):
+def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.DataFrame,email:str):
     logger.info('A Proceder com o Registo do Contacto com o Cliente no GIO')
+    #click Contactos
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[1]').click()
     time.sleep(5)
+    #+#click Contactos
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[1]/div[2]/div/div/div[1]/button').click()
+    time.sleep(5)
+    #click tipificacao
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[10]/span/span[1]/span/span[1]/span').click()
     time.sleep(5)
-    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[6]').click()
+    #dar filtro tipificacao
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[10]/select/option[7]').click()
     time.sleep(5)
-    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[11]/span/span[1]/span/span[1]/span').click()
+    #click estado
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[11]/span/span[1]/span').click()
     time.sleep(5)
-    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[2]').click()
+    #dar filtro estado
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[11]/select/option[3]').click()
     time.sleep(5)
+    #click tipo
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[9]/span/span[1]/span/span[1]/span').click()
-    time.sleep(5)
-    driver.find_element(By.XPATH,'/html/body/span/span/span[2]/ul/li[1]').click()
+    #select email
+    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[9]/select/option[2]').click()
     time.sleep(5)
     desc = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[16]/textarea')
     desc.clear()
-    textodesc = 'Assunto do Email: Corpo do Email: Tema NLP: Template Resposta Enviado: '
+    textodesc = f"Assunto do Email: {df.loc[0,'Subject']} \nCorpo do Email:  {df.loc[0,'Body']}\nTema NLP: {df.loc[0,'IDIntencao']}\nTemplate Resposta Enviado: {email}"
     desc.send_keys(textodesc)
     time.sleep(5)
+    #click guardar
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[7]/div/button[2]').click()
     time.sleep(3)
 
 
 
-
-def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger:logging.Logger):
+def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logger:logging.Logger):
     time.sleep(3)
     searchEmail = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[4]/input')
     searchName = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[1]/input')
     searchNIF = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[2]/input')
     searchApolc = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[5]/input')
-    file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'
-    auxfile_path= r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\classificacaoapolices.xlsx'
+    file_path = queryByNameDict('PathConfigIntencoes',dictConfig)
+    auxfile_path= queryByNameDict('PathClassificacaoApolices',dictConfig)
     
     dfRegras = pd.read_excel(file_path,keep_default_na=False,sheet_name='IdentifEntidade')
-
-    IDbd = dfInfoRegisto.loc[0,'IDIntencao']
     
     #Saber que Regras Ignorar (onde todas as columns são NA)
     dfRegrasNA = dfRegras[dfRegras.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
@@ -268,13 +263,13 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
 
 
     if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegras['ID'].values:
-        row = dfRegras.loc[dfRegras['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+        rowAnalise = dfRegras.loc[dfRegras['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
     else:
         raise BusinessRuleException("ID atribuido pelo NLP não configurado!")
-    logger.info(f'A utilizar a regra - {row.values}')
+    logger.info(f'A utilizar a regra - {rowAnalise.values}')
     boolMatch = False
 
-    for index, row in row.iterrows():
+    for index, row in rowAnalise.iterrows():
         for col in dfRegras.columns:
             if not col == 'ID':
                 if row[col] == 'NA':
@@ -283,54 +278,90 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
                     match col:
                         case 'Email':
                             search = searchEmail
-                            pesquisa = dfInfoRegisto['EmailRemetente'].to_string()
+                            pesquisa = dfInfoRegisto.loc[0,'EmailRemetente']
                         case 'NIF':
                             search = searchNIF
-                            pesquisa = dfInfoRegisto['NIF'].to_string()
+                            pesquisa = dfInfoRegisto.loc[0,'NIF']
                         case 'Nome':
                             search = searchName
-                            pesquisa = dfInfoRegisto['Nome'].to_string()
+                            pesquisa = dfInfoRegisto.loc[0,'Nome']
                         case 'Apólice':
                             search = searchApolc
-                            pesquisa = dfInfoRegisto['Apolice'].to_string()
+                            pesquisa = dfInfoRegisto.loc[0,'Apolice']
                         case _:
                             logger.info(f"Skipping Coluna {col}")
-                    logger.info(f'A Pesquisar no GIO por {col} o valor: {pesquisa.replace("0","").replace(" ","")}')
-                    pesquisarGIO(driver,search,pesquisa)
-                    dfGIO = ScrapTableGIO(driver,logger)
-                    #print(dfGIO['Tipo Entidade'])
-                    if not dfGIO.empty:
-                        if row[col] == 'Não':
-                            raise BusinessRuleException(f"A Pesquisa do Campo {col} retornou valores sendo que não é suposto. ID: {row['ID']} Regra: {row[col]}.")
-                        for value in row[col].split(";"):
-                            #print(value)
-                            if any(val == value for val in dfGIO['TipoEntidade'].values):
-                                for index,rowGIO in dfGIO['TipoEntidade'].items():
-                                    logger.info(f'A procurar Match entre {col} com o Tipo de Entidade extraído de {rowGIO} com a regra...')
-                                    if rowGIO == value:
-                                        boolMatch = True
-                                        logger.info(f'Match com Regra {col}, a regra diz {row[col].replace("0","").replace(" ","")} e o registo extraído tem {rowGIO.replace("0","").replace(" ","")}')
-                                        colunaMatch = col
-                                        if index >= 100:
-                                            index = index-100                                        
-                                        driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[2]/div/table/tbody/tr[{index+1}]/td[7]/div').click()
-                                        break
-                                break
-                    """
+                    if pesquisa.strip() == '':
+                        logger.info(f'Sem Dados para Pesquisar em {col}')
                     else:
-                    
-                        if not row[col] == 'Não':
-                            raise BusinessRuleException("Sem Match Para Nenhuma Regra")
-                    """     
+                        for p in pesquisa.split('|'):
+                            logger.info(f'A Pesquisar no GIO por {col} o valor: {p.strip()}')
+                            pesquisarGIO(driver,search,p.strip())
+                            dfGIO = ScrapTableGIO(driver,logger)
+                            #print(dfGIO['Tipo Entidade'])
+                            if not dfGIO.empty:
+                                if row[col] == 'Não':
+                                    raise BusinessRuleException(f"A Pesquisa do Campo {col} retornou valores sendo que não é suposto. ID: {row['ID']} Regra: {row[col]}.")
+                                for value in row[col].split(";"):
+                                    #print(value)
+                                    if any(val == value for val in dfGIO['TipoEntidade'].values):
+                                        for index,rowGIO in dfGIO['TipoEntidade'].items():
+                                            logger.info(f'A procurar Match entre {col} com o Tipo de Entidade extraído de {rowGIO} com a regra...')
+                                            if rowGIO == value:
+                                                boolMatch = True
+                                                logger.info(f'Match com Regra {col}, a regra diz {row[col].replace("0","").replace(" ","")} e o registo extraído tem {rowGIO.replace("0","").replace(" ","")}')
+                                                colunaMatch = col
+                                                while index > 100:
+                                                    index = index-100
+                                                    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[3]').click()
+                                                    if index < 100:
+                                                        break                                        
+                                                driver.find_element(By.XPATH,f'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[2]/div/table/tbody/tr[{index+1}]/td[7]/div').click()
+                                                break
+                                        break
+                            else:
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                if boolMatch:
+                        break
             if boolMatch:
-                    break
+                break
             else:
                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
         
+    boolMatchNA =False
 
     if not boolMatch and not any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'].values):
-        raise BusinessRuleException("Sem Match Para Nenhuma Regra")
+        logger.warn('Sem Match Com Nenhuma das Regras Definidas')
+        logger.info('A Verificar se o Registo contem um Cliente RealVida')
+        for index, row in rowAnalise.iterrows():
+            for col in dfRegras.columns:
+                if not col == 'ID':
+                    match col:
+                        case 'Email':
+                            search = searchEmail
+                            pesquisa = dfInfoRegisto.loc[0,'EmailRemetente']
+                        case 'NIF':
+                            search = searchNIF
+                            pesquisa = dfInfoRegisto.loc[0,'NIF']
+                        case 'Nome':
+                            search = searchName
+                            pesquisa = dfInfoRegisto.loc[0,'Nome']
+                        case 'Apólice':
+                            search = searchApolc
+                            pesquisa = dfInfoRegisto.loc[0,'Apolice']
+                    for p in pesquisa.split('|'):
+                        logger.info(f'A Pesquisar no GIO por {col} o valor: {p.strip()}')
+                        pesquisarGIO(driver,search,p.strip())
+                        dfGIO = ScrapTableGIO(driver,logger)
+                        if not dfGIO.empty:
+                            raise BusinessRuleException("Registo contém dados de um Cliente RealVida")
+                        else:
+                            boolMatchNA = True
+
+    if boolMatchNA == True:
+        logger.info('Impossibilidade de Identificação de Cliente RealVida')
+        dfInfoRegisto.loc[0,'IDIntencao'] = 'NA'
 
     #Identifacao Alternativa para casos de clientes sem emails registados/vazios
 
@@ -350,6 +381,7 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
     
     #Verificação de Apolices Ativas (Caso necessário)
     dfRegrasApoliceAtivas = pd.read_excel(file_path,keep_default_na=False,sheet_name='ApolAtivas')
+    #Apenas entra aqui se o ID identificado tenha alguma coluna sem 'NA' else não entrará
     if not dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and boolMatch:
         rowAnalise = dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: (x !='NA')).any(axis=1)].loc[dfRegrasApoliceAtivas['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
         driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[4]').click()
@@ -476,9 +508,15 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dfRegras,logger
     if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and not boolMatch:
         raise BusinessRuleException('Sem Match com a Regra')
     
-    #send_email()
+        
+    dfEmailTemplates = pd.read_excel(file_path,keep_default_na=False,sheet_name='IDTemplates')
+    row = dfEmailTemplates.loc[dfEmailTemplates['ID'] == 2]
+    for body in row['Template']:
+        #send_email("",body,'brunofilipe.lobo@cgi.com','45678901-2cde-f123-4567-890abcdef123')
+        email = body
+        break
 
-    registarcontactoGIO(driver,logger,dfInfoRegisto)
-
-    #atividade final
-    driver.find_element(By.ID,'deleteData').click()
+    if not dfInfoRegisto.loc[0,'IDIntencao'] == 'NA':
+        registarcontactoGIO(driver,logger,dfInfoRegisto,email)
+        #atividade final
+        driver.find_element(By.ID,'deleteData').click()

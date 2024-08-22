@@ -1,5 +1,5 @@
 import logging      
-import databaseSQLExpress
+from customScripts import databaseSQLExpress 
 import datetime
 import os 
 
@@ -11,8 +11,11 @@ class CustomHandler(logging.StreamHandler):
     #juntar file_name, func_name e message
     def emit(self,record):
         columns =['Process','Robot','Time','Level','[User]','Message']
-        record.msg ="{} - " +record.msg 
-        data = [('RVSIPA2024','RVSIPA2024_{}'.format(os.getlogin()),datetime.datetime.now(),record.levelname,os.getlogin(),record.msg.format(record.filename+" | "+record.funcName))]
+        msg = "{} - "+record.msg.replace('{','').replace('}','')
+        if '{' in msg and '}' in msg:
+            msg = msg.format(record.filename + " | " + record.funcName)
+       #record.msg ="{} - " +record.msg
+        data = [('RVSIPA2024','RVSIPA2024_{}'.format(os.getlogin()),datetime.datetime.now(),record.levelname,os.getlogin(),msg)]
         #print(data)#debug
         if record:
             databaseSQLExpress.InsertDataBD(self.db,self.table,columns,data)

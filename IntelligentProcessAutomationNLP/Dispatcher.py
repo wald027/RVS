@@ -1,10 +1,10 @@
-from customLogging import setup_logging
-import databaseSQLExpress
-import MailboxRVS
+from customScripts import customLogging 
+from customScripts import databaseSQLExpress
+from Automation import MailboxRVS
 import logging
-import readConfig
+from customScripts import readConfig
 import time
-from main import EmailClassifier
+from ModelNLP.NLP import EmailClassifier
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
 
 NUM_LABELS = 11
@@ -22,7 +22,7 @@ COLUMN_NAMES = [
 ]
 
 
-def main():
+def NLP():
     #iniciar database, custom logger
     dictConfig = readConfig.readConfig()
     server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
@@ -32,7 +32,7 @@ def main():
     databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
 
 
-    setup_logging(db,databaseLogsTable)
+    customLogging.setup_logging(db,databaseLogsTable)
     try:
         logger = logging.getLogger(__name__)
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
@@ -53,6 +53,6 @@ def main():
     db.close()
 
 if __name__ == '__main__':
-    main()
+    NLP()
 
     

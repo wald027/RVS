@@ -1,7 +1,7 @@
 import win32com.client
 from datetime import datetime, timedelta
-from readConfig import readConfig, queryByNameDict
-from databaseSQLExpress import *
+from customScripts.readConfig import queryByNameDict
+from customScripts.databaseSQLExpress import *
 
 #eventualmente retirar isto e usar a db connection vinda do dispacther
 #server = 'PT-L162219\SQLEXPRESS'
@@ -34,24 +34,28 @@ def EmailWithRegra(mail,logger):
         logger.info(f"NIF extraído com sucesso: {NumIF}")
     else:
         NumIF = ""
+    if mail.Body.find('Notas:')>-1:
+        Body = mail.body.split('Notas:')[1]
+        
     for line in mail.Body.splitlines():
         if line.find('Tipo Assunto:')>-1 or line.find('Assunto:')>-1:
             Subject = line.split(':')[1]
             logger.info(f'Assunto extraído com sucesso: {Subject}')
         if line.find('Nome:')>-1:
             if not '@' in line.split(':')[1]:
-                Nome = line.split(':')[1].lower().title()
+                Nome = line.split(':')[1].lower().title().strip()
+                Nome = Nome.replace("'",' ')
                 logger.info(f"Nome extraído com sucesso: {Nome}")
             else:
                 Nome = ''
         if line.find('Email:')>-1:
             Email = line.split(':')[1].lower()
             logger.info(f'Email extraído com sucesso: {Email}')
-        if line.find('Mensagem:')>-1 or line.find('Notas:')>-1:
+        if line.find('Mensagem:')>-1 :
             Body = line.split(':')[1]
             logger.info(f'Body extraído com sucesso: {Body}')
 
-    return Body, NumIF, Nome, Subject
+    return Body, NumIF, Nome, Subject, Email
 
             
 
@@ -89,10 +93,10 @@ def GetEmailsInbox(logger,conn,dictConfig):
             message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
             for emailAddr in queryByNameDict("SenderEmailException",dictConfig).split('|'):
                 if emailAddr == mail.SenderEmailAddress:
-                    Body, NumIF, Nome, Subject = EmailWithRegra(mail,logger)
+                    Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
                     columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
-                    data = [(mail.SenderEmailAddress,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
-                    mail.Subject =Subject
+                    data = [(Email,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
+                    #mail.Subject =Subject
                     break
                 else:
                     data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]

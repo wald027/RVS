@@ -34,7 +34,7 @@ def queryByNameDict(name,dictConfig):
             if intCounter == len(dictConfig):
                 return None
             
-
+#Apagar
 def readRegrasApolices():
     file_path = r'C:\Users\brunofilipe.lobo\Documents\Code\realvidaseguros\intencoes.xlsx'
     if file_path:

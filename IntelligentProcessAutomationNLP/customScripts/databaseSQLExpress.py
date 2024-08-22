@@ -1,6 +1,7 @@
 import pyodbc
 import pandas as pd
 import datetime
+import os 
 
 def ConnectToBD(server, database):
     connection_string = (
@@ -54,11 +55,13 @@ def GetQueueItem(conn,column_names,QueueTable,InfoTable):
         cursor.execute(query)
     return df
 
-def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,column_names,QueueTable,InfoTable):
+def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,column_names,QueueTable,InfoTable,estado,exception,exception_message):
     cursor = conn.cursor()
     for i in df['EmailID']:
         query = f"""
-                    Update{QueueTable}
-                    Set Status = 'Success', [Ended Performer] = GETDATE(),
+                    Update {QueueTable}
+                    Set Status = '{estado}', [Ended Performer] = GETDATE(),Robot = '{'RVSIPA2024_{}'.format(os.getlogin())}',Exception='{exception}',Exception_Message='{exception_message}'
                     WHERE Reference = '{i}';
                 """
+        cursor.execute(query)
+    
