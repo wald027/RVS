@@ -11,6 +11,7 @@ import pandas as pd
 import re
 from Automation.BusinessRuleExceptions import *
 import win32com.client
+from pywinauto import Application
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"
 
@@ -188,25 +189,26 @@ def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> s
     return CredorHipotecario
 
 #Não terminado/implementado devido a dúvidas do ambiente produtivo
-def send_email(subject, body, to,label_id,cc=None, attachments=None):
+def send_email(subject, body, to,logger:logging.Logger, attachments=None):
     outlook = win32com.client.Dispatch('outlook.application')
-    print(body)
     mail = outlook.CreateItem(0)
     mail.Subject = subject
     mail.Body = body
     mail.To = to
-    if cc:
-        mail.CC = cc
-    if label_id:
-        mail.PropertyAccessor.SetProperty("http://schemas.microsoft.com/mapi/string/{00020386-0000-0000-C000-000000000046}/ClassificationGuid", label_id)
-    if attachments:
-        for attachment in attachments:
-            mail.Attachments.Add(attachment)
+    #Attachment
+    mail.Display()
+
+    time.sleep(5)
+    app = Application(backend='uia').connect(title_re='.*Message.*')
+    main_window = app.window(title_re='.*Message.*')
+    main_window.child_window(title="Non-Business", control_type="ListItem").click_input()
     try:
-        mail.Send()
-        print("Email enviado com Sucesso")
+        main_window.child_window(title="Send", control_type="Button").click_input()
+        logger.info(f'Email para {to}, Enviado com Sucesso!')
     except Exception as e:
-        print(f'Erro enviar Email {e}')
+        logger.error(f'Impossibilidade em enviar o Email: {e}')
+        raise Exception('Impossibilidade em enviar o Email')
+
 
 def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.DataFrame,email:str):
     logger.info('A Proceder com o Registo do Contacto com o Cliente no GIO')
@@ -288,7 +290,7 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                             pesquisa = dfInfoRegisto.loc[0,'Apolice']
                         case _:
                             logger.info(f"Skipping Coluna {col}")
-                    if pesquisa.strip() == '':
+                    if pesquisa.strip().replace(' ','') == '':
                         logger.info(f'Sem Dados para Pesquisar em {col}')
                     else:
                         for p in pesquisa.split('|'):
@@ -348,18 +350,27 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                         case 'Apólice':
                             search = searchApolc
                             pesquisa = dfInfoRegisto.loc[0,'Apolice']
-                    for p in pesquisa.split('|'):
-                        logger.info(f'A Pesquisar no GIO por {col} o valor: {p.strip()}')
-                        pesquisarGIO(driver,search,p.strip())
-                        dfGIO = ScrapTableGIO(driver,logger)
-                        if not dfGIO.empty:
-                            raise BusinessRuleException("Registo contém dados de um Cliente RealVida")
-                        else:
-                            boolMatchNA = True
-
+                    if pesquisa.strip().replace(' ','') == '':
+                        logger.info(f'Sem Dados para Pesquisar em {col}')
+                        boolMatchNA = True
+                    else:
+                        for p in pesquisa.split('|'):
+                            logger.info(f'A Pesquisar no GIO por {col} o valor: {p.strip()}')
+                            pesquisarGIO(driver,search,p.strip())
+                            dfGIO = ScrapTableGIO(driver,logger)
+                            if not dfGIO.empty:
+                                raise BusinessRuleException("Registo contém dados de um Cliente RealVida")
+                            else:
+                                boolMatchNA = True
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()                           
+    elif not boolMatch and any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'].values):
+        rowAnalise = rowAnalise[rowAnalise.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
+        
     if boolMatchNA == True:
-        logger.info('Impossibilidade de Identificação de Cliente RealVida')
+        logger.warning('Impossibilidade de Identificação de Cliente RealVida')
         dfInfoRegisto.loc[0,'IDIntencao'] = 'NA'
+        rowAnalise = dfRegras.loc[dfRegras['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
 
     #Identifacao Alternativa para casos de clientes sem emails registados/vazios
 
@@ -508,13 +519,15 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
     
         
     dfEmailTemplates = pd.read_excel(file_path,keep_default_na=False,sheet_name='IDTemplates')
-    row = dfEmailTemplates.loc[dfEmailTemplates['ID'] == 2]
-    for body in row['Template']:
-        #send_email("",body,'brunofilipe.lobo@cgi.com','45678901-2cde-f123-4567-890abcdef123')
+    rowEmails = dfEmailTemplates.loc[dfEmailTemplates['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+    for body in rowEmails['Template']:
+        send_email("Teste",body,'brunofilipe.lobo@cgi.com',logger)
         email = body
         break
-
-    if not dfInfoRegisto.loc[0,'IDIntencao'] == 'NA':
+    print(rowAnalise)
+    #print(rowAnalise.drop(columns='ID').map(lambda x :x == 'NA').all(axis=1).empty)
+    print(rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any())
+    if not rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any() and not rowAnalise.drop(columns='ID').eq('Não').all(axis=1).any():
         registarcontactoGIO(driver,logger,dfInfoRegisto,email)
         #atividade final
         driver.find_element(By.ID,'deleteData').click()

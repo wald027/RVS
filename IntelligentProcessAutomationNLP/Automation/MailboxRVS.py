@@ -2,7 +2,7 @@ import win32com.client
 from datetime import datetime, timedelta
 from customScripts.readConfig import queryByNameDict
 from customScripts.databaseSQLExpress import *
-
+import pandas as pd
 #eventualmente retirar isto e usar a db connection vinda do dispacther
 #server = 'PT-L162219\SQLEXPRESS'
 #database = 'RealVidaSeguros'
@@ -25,6 +25,34 @@ def find_folder(parent_folder, folder_name):
         if folder.Name == folder_name:
             return folder
     return None
+
+
+def EmailWithRegra2(mail,logger):
+    
+    dfRegrasEmail = pd.read_excel(r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx",sheet_name='RegrasEmail',keep_default_na=False)
+
+    print(dfRegrasEmail)
+
+    for index, row in dfRegrasEmail.iterrows():
+        for col in dfRegrasEmail.columns:
+            if col == 'ExtrairInfo'and row[col] == 'Não' and row['Remetente'] == {mail.SenderName + f' <{mail.SenderEmailAddress}>'}:
+                logger.info(f"Detetado Email com Regra vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
+                for column in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo']).columns:
+                    if not row[column] == 'NA':
+                        print(row[column])
+                        if column == 'Subject' and mail.Subject.find(row[column]):
+                            logger.info(f'Match com a Regra de {column}, contendo {row[column]}')
+                        elif column == 'Body' and mail.Body.find(row[column]):
+                            logger.info(f'Match com a Regra de {column}, contendo {row[column]}')
+            elif col == 'ExtrairInfo' and row[col] == 'Sim':
+                for column in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo']).columns:
+                    if not row[column] == 'NA':
+                        if column == 'Subject':
+                            for info in row[column].split('|'):
+                                if mail.Subject.find(info) >-1:
+                                    NumIF = mail.Subject.split(info)
+                        #Extrair Info
+
 
 def EmailWithRegra(mail,logger):
     Body= ''
@@ -80,7 +108,7 @@ def GetEmailsInbox(logger,conn,dictConfig):
         #messages = messages.Restrict("[ReceivedTime] >= '" + received_dt + "'")
         #messages = messages.Restrict("[SenderEmailAddress] = 'brun0l0b0@outlook.com'")
         #messages = messages.Restrict("[Subject] = 'Sample Report'")
-
+        numEmails = messages.count 
         logger.info(f'Existem {messages.count} emails na pasta {current_folder.Name}') #nome da pasta
         Attachments='False'
         #https://learn.microsoft.com/en-us/dotnet/api/microsoft.office.interop.outlook.mailitem?view=outlook-pia conteudo email
@@ -102,7 +130,6 @@ def GetEmailsInbox(logger,conn,dictConfig):
                 else:
                     data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
                     columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
-            print(mail.ConversationID)
             logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
             try:
                 InsertDataBD(conn,tablename,columns,data)
@@ -116,7 +143,7 @@ def GetEmailsInbox(logger,conn,dictConfig):
                 mail.move(folder_toMove)
             except Exception as e:
                 logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
-        return messages.count
+        return numEmails
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     #if conn:
