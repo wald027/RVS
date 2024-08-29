@@ -49,19 +49,24 @@ def GetQueueItem(conn,column_names,QueueTable,InfoTable):
     for i in df['EmailID']:
         query = f"""
                     UPDATE {QueueTable}
-                    Set Status = 'In Progress' , [Started Performer] = GETDATE()
+                    Set Status = 'In Progress' , [Started Performer] = GETDATE(),Robot = '{os.environ["COMPUTERNAME"]}_{os.getlogin()}'
                     WHERE Reference = '{i}';
                 """ 
         cursor.execute(query)
     return df
 
-def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,column_names,QueueTable,InfoTable,estado,exception,exception_message):
+def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,mensagem,QueueTable,InfoTable,estado,exception,exception_message):
     cursor = conn.cursor()
     for i in df['EmailID']:
         query = f"""
                     Update {QueueTable}
-                    Set Status = '{estado}', [Ended Performer] = GETDATE(),Robot = '{'RVSIPA2024_{}'.format(os.getlogin())}',Exception='{exception}',Exception_Message='{exception_message}'
+                    Set Status = '{estado}', [Ended Performer] = GETDATE(),Exception='{exception}',Exception_Message='{exception_message}'
                     WHERE Reference = '{i}';
                 """
         cursor.execute(query)
-    
+        query = f"""
+                    Update {InfoTable}
+                    Set DetalheMensagem = '{exception_message}', Mensagem ='{mensagem}' , Estado='{exception}'
+                    Where EmailID = '{i}';
+                """
+        cursor.execute(query)

@@ -8,12 +8,12 @@ from ModelNLP.NLP import EmailClassifier
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
 
 NUM_LABELS = 11
-BASE_DIR = 'realvidaseguros/'
-TOKENIZER_PATH = BASE_DIR + "tokenizer"
-MODEL_PATH = BASE_DIR + "model"
-DATABASE = "RealVidaSeguros"
-STATUS_TABLE = "QueueItem"
-EMAIL_TABLE = "Emails_IPA_NLP"
+#BASE_DIR = 'realvidaseguros/'
+#TOKENIZER_PATH = BASE_DIR + "tokenizer"
+#MODEL_PATH = BASE_DIR + "model"
+#DATABASE = "RealVidaSeguros"
+#STATUS_TABLE = "Queue_Items"
+#EMAIL_TABLE = "Pedidos"
 
 COLUMN_NAMES = [
     'EmailRemetente','DataEmail', 'EmailID','Subject', 'Body', 'Anexos',
@@ -30,9 +30,15 @@ def main():
     db = databaseSQLExpress.ConnectToBD(server,database)
     driver = readConfig.queryByNameDict('SQLDriver',dictConfig)
     databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
+    nomeprocesso = readConfig.queryByNameDict('NomeProcesso',dictConfig)
+    STATUS_TABLE = readConfig.queryByNameDict('QueueTableName',dictConfig)
+    EMAIL_TABLE = readConfig.queryByNameDict('TableName',dictConfig)
+    BASE_DIR = readConfig.queryByNameDict('Base_Dir',dictConfig)
+    NUM_LABELS = readConfig.queryByNameDict('NumLabelsNLP',dictConfig)
+    #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
 
 
-    customLogging.setup_logging(db,databaseLogsTable)
+    customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
     try:
         logger = logging.getLogger(__name__)
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
@@ -41,7 +47,7 @@ def main():
         mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
         if mailcount > 0:
             logger.info("Emails Extraídos com Sucesso!")
-            ENGINE = create_engine(f"mssql+pyodbc://@{server}/{DATABASE}?driver={driver}&Trusted_Connection=yes")
+            ENGINE = create_engine(f"mssql+pyodbc://@{server}/{database}?driver={driver}&Trusted_Connection=yes")
             CONN = ENGINE.connect()
             EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,logger,db).run()
         else:

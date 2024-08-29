@@ -4,10 +4,11 @@ import datetime
 import os 
 
 class CustomHandler(logging.StreamHandler):
-    def __init__(self,db,table):
+    def __init__(self,db,table,nomeprocesso):
         super().__init__()
         self.db = db
         self.table=table
+        self.nomeprocesso=nomeprocesso
     #juntar file_name, func_name e message
     def emit(self,record):
         columns =['Process','Robot','Time','Level','[User]','Message']
@@ -15,16 +16,16 @@ class CustomHandler(logging.StreamHandler):
         if '{' in msg and '}' in msg:
             msg = msg.format(record.filename + " | " + record.funcName)
        #record.msg ="{} - " +record.msg
-        data = [('RVSIPA2024','RVSIPA2024_{}'.format(os.getlogin()),datetime.datetime.now(),record.levelname,os.getlogin(),msg)]
+        data = [(self.nomeprocesso,f'{os.environ["COMPUTERNAME"]}_{os.getlogin()}',datetime.datetime.now(),record.levelname,os.getlogin(),msg)]
         #print(data)#debug
         if record:
             databaseSQLExpress.InsertDataBD(self.db,self.table,columns,data)
 
-def setup_logging(db,table):
+def setup_logging(db,table,nomeprocesso):
     logger = logging.Logger('RealVidaSeguros')
     logger = logging.getLogger()
     logger.setLevel(logging.INFO)
-    Customhandler = CustomHandler(db,table)
+    Customhandler = CustomHandler(db,table,nomeprocesso)
     logger.addHandler(Customhandler)
     #Handler para os logs aparecerem na consola (talvez desativar em producao)
     formatter = logging.Formatter('%(asctime)s | %(filename)s | %(funcName)s | %(levelname)s | %(message)s')

@@ -1,0 +1,1 @@
+from realvidaseguros.IntelligentProcessAutomationNLP.customScripts.readConfig import queryByNameDict
