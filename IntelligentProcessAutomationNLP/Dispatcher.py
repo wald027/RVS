@@ -6,8 +6,10 @@ from customScripts import readConfig
 import time
 from ModelNLP.NLP import EmailClassifier
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
+import os
+from pywinauto import Application
 
-NUM_LABELS = 11
+#NUM_LABELS = 11
 #BASE_DIR = 'realvidaseguros/'
 #TOKENIZER_PATH = BASE_DIR + "tokenizer"
 #MODEL_PATH = BASE_DIR + "model"
@@ -15,16 +17,31 @@ NUM_LABELS = 11
 #STATUS_TABLE = "Queue_Items"
 #EMAIL_TABLE = "Pedidos"
 
+PATH_CONFIG = r'Config.xlsx'
+
 COLUMN_NAMES = [
     'EmailRemetente','DataEmail', 'EmailID','Subject', 'Body', 'Anexos',
     'NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes',
-    'DetalheMensagem', 'Mensagem', 'Estado'
+    'DetalheMensagem', 'Mensagem', 'Estado','EmailCurto','NomeIntencao'
 ]
 
+label_map = {
+    '0': 'Reforços apólices financeiras',
+    '1': 'Atualização dados pessoais A',
+    '2': 'Atualização dados pessoais B',
+    '3': 'Atualização de capital da apólice',
+    #4: 'Pedido de informação da apólice',
+    '5': 'Pedido de resgate de apólice financeira',
+    '6': 'Acesso à Área Reservada de Clientes (MyRealVida)',
+    '7': 'Alteração de IBAN de débito',
+    '8': 'Pedido de anulação de apólices Universo',
+    '9': 'Participação de sinistros Acidentes Pessoais',
+    '10': 'Participação de sinistros Vida Risco'
+}
 
 def main():
     #iniciar database, custom logger
-    dictConfig = readConfig.readConfig()
+    dictConfig = readConfig.readConfig(PATH_CONFIG)
     server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
     database = readConfig.queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
@@ -44,12 +61,15 @@ def main():
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
         time.sleep(1)
         logger.info("Config Lida Com Sucesso!")
+        #for app in readConfig.queryByNameDict('AplicacoesDisp',dictConfig).split(','):
+        #    KillAllApplication(app+'.exe',logger)
+        #InitApplications(readConfig.queryByNameDict('outlookPath',dictConfig),logger)
         mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
         if mailcount > 0:
             logger.info("Emails Extraídos com Sucesso!")
             ENGINE = create_engine(f"mssql+pyodbc://@{server}/{database}?driver={driver}&Trusted_Connection=yes")
             CONN = ENGINE.connect()
-            EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,logger,db).run()
+            EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,label_map,logger,db).run()
         else:
             logger.warning('Sem Emails para Tratamento!')  
         time.sleep(5)
@@ -58,7 +78,23 @@ def main():
         logger.error(f"Erro Dispatcher {e}")
     db.close()
 
-if __name__ == '__main__':
-    main()
 
     
+def InitApplications(outlook_path,logger:logging.Logger):
+    #outlook_path = r"C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+    logger.info(f'A tentar abrir a aplicação {outlook_path}')
+    Application().start(outlook_path)
+    time.sleep(10)
+    logger.info('Aplicação iniciada com sucesso!')
+
+def KillAllApplication(processname,logger:logging.Logger):
+    try:
+        logger.info(f'A Forçar o Fecho da Aplicação {processname}...')
+        os.system(f'taskkill /f /im {processname}')
+        logger.info(f'{processname} fechado com Sucesso!')
+    except Exception as e:
+        logger.warning(e)
+
+
+if __name__ == '__main__':
+    main()

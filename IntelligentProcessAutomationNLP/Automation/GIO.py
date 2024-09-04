@@ -12,6 +12,7 @@ import re
 from Automation.BusinessRuleExceptions import *
 import win32com.client
 from pywinauto import Application
+from Automation.MailboxRVS import SearchMailInbox, MoveEmailToFolder
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"
 
@@ -189,22 +190,27 @@ def GetInfoCredorHipotecario(driver:webdriver.Chrome,logger:logging.Logger) -> s
     return CredorHipotecario
 
 #Não terminado/implementado devido a dúvidas do ambiente produtivo
-def send_email(subject, body, to,logger:logging.Logger, attachments=None):
-    outlook = win32com.client.Dispatch('outlook.application')
-    mail = outlook.CreateItem(0)
-    mail.Subject = subject
-    mail.Body = body
-    mail.To = to
-    #Attachment
-    mail.Display()
+def send_email(mail, body,logger:logging.Logger,To, attachments=None):
+    reply = mail.Reply()
+    reply.To = 'brunofilipe.lobo@cgi.com' #Usado em dev para testesssss
+    #reply.To = To
+    reply.Body = body + reply.Body
+    for attachment_path in attachments:
+        reply.Attachments.Add(attachment_path)
 
-    time.sleep(5)
+    reply.Display()
+
+    time.sleep(15)
     app = Application(backend='uia').connect(title_re='.*Message.*')
     main_window = app.window(title_re='.*Message.*')
-    main_window.child_window(title="Non-Business", control_type="ListItem").click_input()
+    main_window.set_focus()
+    try:
+        main_window.child_window(title="Non-Business", control_type="ListItem").click_input()
+    except:
+        logger.info('Sem Label de Classificação')
     try:
         main_window.child_window(title="Send", control_type="Button").click_input()
-        logger.info(f'Email para {to}, Enviado com Sucesso!')
+        logger.info(f'Email para {To} , Enviado com Sucesso!')
     except Exception as e:
         logger.error(f'Impossibilidade em enviar o Email: {e}')
         raise Exception('Impossibilidade em enviar o Email')
@@ -261,13 +267,17 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
     dfRegrasNA = dfRegras[dfRegras.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
     #print(dfRegrasNA)
 
-
     if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegras['ID'].values:
         rowAnalise = dfRegras.loc[dfRegras['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
     else:
         raise BusinessRuleException("ID atribuido pelo NLP não configurado!")
     logger.info(f'A utilizar a regra - {rowAnalise.values}')
     boolMatch = False
+
+    dfRegrasAnexos = pd.read_excel(file_path,keep_default_na=False,sheet_name='Anexos') 
+    if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasAnexos[dfRegrasAnexos.drop(columns='ID').map(lambda x: x == 'Não').all(axis=1)].values:
+        if not dfInfoRegisto.loc[0,'Anexos'] == 'False':
+            raise BusinessRuleException('Registo contém Anexos, enquando a Regra não permite')
 
     for index, row in rowAnalise.iterrows():
         for col in dfRegras.columns:
@@ -359,13 +369,14 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                             pesquisarGIO(driver,search,p.strip())
                             dfGIO = ScrapTableGIO(driver,logger)
                             if not dfGIO.empty:
-                                raise BusinessRuleException("Registo contém dados de um Cliente RealVida")
+                                raise BusinessRuleException("Registo com Cliente RealVida - Sem Match Com Nenhuma das Regras Definidas")
                             else:
                                 boolMatchNA = True
                                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()                           
     elif not boolMatch and any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'].values):
         rowAnalise = rowAnalise[rowAnalise.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
+        dfInfoRegisto.loc[0,'IDIntencao'] = '3NA'
         
     if boolMatchNA == True:
         logger.warning('Impossibilidade de Identificação de Cliente RealVida')
@@ -520,14 +531,31 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
         
     dfEmailTemplates = pd.read_excel(file_path,keep_default_na=False,sheet_name='IDTemplates')
     rowEmails = dfEmailTemplates.loc[dfEmailTemplates['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+    email = ''
     for body in rowEmails['Template']:
-        send_email("Teste",body,'brunofilipe.lobo@cgi.com',logger)
         email = body
-        break
-    print(rowAnalise)
+        break 
+    #print(rowAnalise)
     #print(rowAnalise.drop(columns='ID').map(lambda x :x == 'NA').all(axis=1).empty)
-    print(rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any())
+    #print(rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any())
     if not rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any() and not rowAnalise.drop(columns='ID').eq('Não').all(axis=1).any():
         registarcontactoGIO(driver,logger,dfInfoRegisto,email)
         #atividade final
         driver.find_element(By.ID,'deleteData').click()
+
+def EnviarEmail(dfInfoRegisto:pd.DataFrame,dictConfig,logger:logging.Logger):
+    file_path = queryByNameDict('PathConfigIntencoes',dictConfig)
+    FolderTratamentoRPA = queryByNameDict("EmailsToMove",dictConfig)
+    mailbox_name =  queryByNameDict("MailboxName",dictConfig)
+    dfEmailTemplates = pd.read_excel(file_path,keep_default_na=False,sheet_name='IDTemplates')
+    rowEmails = dfEmailTemplates.loc[dfEmailTemplates['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+    To = dfInfoRegisto.loc[0,'EmailRemetente']
+    if rowEmails.empty:
+        raise BusinessRuleException(f'ID: {dfInfoRegisto.loc[0,"IDIntencao"]} Sem Template Para Responder')
+    for body in rowEmails['Template']:
+        mail = SearchMailInbox(logger,FolderTratamentoRPA,mailbox_name,dfInfoRegisto.loc[0,'EmailID'])
+        if mail:
+            send_email(mail,body,logger)
+            break
+        else:
+            raise BusinessRuleException('Email original não encontrado para efetuar resposta')

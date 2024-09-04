@@ -18,7 +18,7 @@ def ConnectToBD(server, database):
         print(f"Erro a Ligar à BD {e}")
         return None
 
-def InsertDataBD(conn, table_name,columns,data):
+def InsertDataBD(conn:pyodbc.Connection, table_name,columns,data):
     cursor = conn.cursor()
     placeholders = ', '.join(['?']*len(columns))
     columns_str =', '.join(columns)
@@ -34,13 +34,13 @@ def InsertDataBD(conn, table_name,columns,data):
     #print("Info Inserida!")
     cursor.close()
 
-def GetQueueItem(conn,column_names,QueueTable,InfoTable):
+def GetQueueItem(conn:pyodbc.Connection,column_names,QueueTable,InfoTable):
     cursor = conn.cursor()
     query = f"""
             SELECT TOP(1) {', '.join(column_names)}
             FROM {InfoTable} et
             JOIN {QueueTable} st ON et.EmailID = st.Reference
-            WHERE st.Status = 'NLP FINISHED';
+            WHERE st.Status = 'NLP FINISHED' OR st.Status = 'NLP FAILED';
         """
     cursor.execute(query)
     results = [list(row) for row in cursor.fetchall()]
@@ -53,6 +53,7 @@ def GetQueueItem(conn,column_names,QueueTable,InfoTable):
                     WHERE Reference = '{i}';
                 """ 
         cursor.execute(query)
+    cursor.close()
     return df
 
 def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,mensagem,QueueTable,InfoTable,estado,exception,exception_message):
@@ -70,3 +71,19 @@ def UpdateQueueItem(conn:pyodbc.Connection, df:pd.DataFrame,mensagem,QueueTable,
                     Where EmailID = '{i}';
                 """
         cursor.execute(query)
+    cursor.close()
+
+
+
+def SetReportOutput(conn:pyodbc.Connection, table_name,df:pd.DataFrame):
+    cursor = conn.cursor()
+    placeholders = ', '.join(['?']*len(df.columns))
+    columns_str =', '.join([f'[{col}]' for col in df.columns])
+    sql_insert=f"INSERT INTO {table_name} ({columns_str}) values ({placeholders})"
+
+    for i, row in df.iterrows():
+        row_as_str = [str(value) for value in row]
+        row_as_str = [None if value.strip() == "" else value for value in row_as_str]
+        cursor.execute(sql_insert,tuple(row_as_str))
+    conn.commit()
+    cursor.close()

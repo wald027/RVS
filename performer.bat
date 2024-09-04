@@ -1,2 +1,3 @@
 @echo off
-python -u "realvidaseguros\IntelligentProcessAutomationNLP\Performer.py"
+python -u "IntelligentProcessAutomationNLP\Performer.py"
+pause

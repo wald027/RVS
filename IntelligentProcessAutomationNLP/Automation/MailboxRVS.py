@@ -27,33 +27,120 @@ def find_folder(parent_folder, folder_name):
     return None
 
 
-def EmailWithRegra2(mail,logger):
-    
-    dfRegrasEmail = pd.read_excel(r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx",sheet_name='RegrasEmail',keep_default_na=False)
-
-    print(dfRegrasEmail)
+def EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmail):
+    #dfRegrasEmail = pd.read_excel(r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx",sheet_name='RegrasEmailDiscard',keep_default_na=False)
 
     for index, row in dfRegrasEmail.iterrows():
         for col in dfRegrasEmail.columns:
-            if col == 'ExtrairInfo'and row[col] == 'Não' and row['Remetente'] == {mail.SenderName + f' <{mail.SenderEmailAddress}>'}:
-                logger.info(f"Detetado Email com Regra vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
-                for column in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo']).columns:
+            if col == 'ExtrairInfo'and row[col] == 'Não' and row['Remetente'] ==mail.SenderName + f' <{mail.SenderEmailAddress}>':
+                logger.info(f"Detetado Email com Regra para ignorar vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
+                for column in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo','PastaMover']).columns:
                     if not row[column] == 'NA':
-                        print(row[column])
-                        if column == 'Subject' and mail.Subject.find(row[column]):
+                        if column == 'Subject' and mail.Subject.find(row[column])>-1:
                             logger.info(f'Match com a Regra de {column}, contendo {row[column]}')
-                        elif column == 'Body' and mail.Body.find(row[column]):
+                            mail.move(find_folder(current_Mailbox,row['PastaMover']))
+                            logger.info(f'Email movido para a pasta {row["PastaMover"]}')
+                            boolDiscard = True
+                            return boolDiscard
+                        elif column == 'Body' and mail.Body.find(row[column])>-1:
                             logger.info(f'Match com a Regra de {column}, contendo {row[column]}')
-            elif col == 'ExtrairInfo' and row[col] == 'Sim':
-                for column in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo']).columns:
-                    if not row[column] == 'NA':
-                        if column == 'Subject':
-                            for info in row[column].split('|'):
-                                if mail.Subject.find(info) >-1:
-                                    NumIF = mail.Subject.split(info)
-                        #Extrair Info
+                            mail.move(find_folder(current_Mailbox,row['PastaMover']))
+                            logger.info(f'Email movido para a pasta {row["PastaMover"]}')
+                            boolDiscard = True
+                            return boolDiscard
+    logger.info(f"Sem Match com nenhuma Regra!")
 
+def EmailRegraPreTratamento(mail,logger,dfRegrasEmail):
+    #dfRegrasEmail = pd.read_excel(r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx",sheet_name='RegrasEmailsPreTratamento',keep_default_na=False)
 
+    for index, row in dfRegrasEmail.iterrows():
+        if row['ExtrairInfo'] == 'Sim' and row['Remetente'] == mail.SenderName + f' <{mail.SenderEmailAddress}>':
+            logger.info(f"Detetado Email com Regra para pré-tratamento vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
+            #Tratar NIF
+            try:
+                NumIF = (mail.Subject.split(row['NIF'].split('|')[0])[1].split(row['NIF'].split('|')[1])[0]).strip()
+                if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10 and NumIF.isnumeric() == True:
+                    logger.info(f"NIF extraído com sucesso: {NumIF}")
+                else:
+                    NumIF = ''
+                if NumIF == '':
+                    NumIF = (mail.Body.split(row['NIF'].split('|')[0])[1].split(row['NIF'].split('|')[1])[0]).strip()
+                    if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10 and NumIF.isnumeric() == True:
+                        logger.info(f"NIF extraído com sucesso: {NumIF}")
+                    else:
+                        NumIF = ''
+            except Exception:
+                NumIF =''
+            #Tratar Restantes Informações
+            for col in dfRegrasEmail.drop(columns=['Remetente','ExtrairInfo','NIF']).columns:
+                if not row[col] == 'NA':
+                    if mail.Body.find(row[col].split('|')[0].strip()) >-1:
+                        try:
+                            info = mail.Body.split(row[col].split('|')[0])[1].split(row[col].split('|')[1])[0]
+                        except ValueError:
+                            info = mail.Body.split(row[col].split('|')[0])[1]
+                        except Exception:
+                            match col:
+                                case 'Body':
+                                    info = mail.Body
+                                case 'Subject':
+                                    info = mail.Subject
+                                case _:
+                                    info = ""
+                        match col:
+                            case 'Body':
+                                Body = info.strip()
+                            case 'Subject':
+                                Subject = info.strip()
+                            case 'Nome':
+                                Nome = info.strip().lower().title()
+                            case 'Email':
+                                Email = info.strip()
+                            case 'Apolice':
+                                Apolice = info.strip()
+                        logger.info(f'{col} extraído com sucesso: {info.strip()}')
+                    elif mail.Body.find(row[col].split('|')[0])>1:
+                        try:
+                            info = mail.Subject.split(row[col].split('|')[0])[1].split(row[col].split('|')[1])[0]
+                        except ValueError:
+                            info = mail.Subject.split(row[col].split('|')[0])[1]
+                        except Exception:
+                            match col:
+                                case 'Body':
+                                    info = mail.Body
+                                case 'Subject':
+                                    info = mail.Subject
+                                case _:
+                                    info = ""
+                        match col:
+                            case 'Body':
+                                Body = info.strip()
+                            case 'Subject':
+                                Subject = info.strip()
+                            case 'Nome':
+                                Nome = info.strip().lower().title()
+                            case 'Email':
+                                Email = info.strip()
+                            case 'Apolice':
+                                Apolice = info.strip()
+                        logger.info(f'{col} extraído com sucesso: {info.strip()}')
+                    else:
+                        match col:
+                            case 'Body':
+                                Body = mail.Body
+                            case 'Subject':
+                                Subject = mail.Subject
+                            case 'Nome':
+                                Nome = ""
+                            case 'Email':
+                                Email = ""
+                            case 'Apolice':
+                                Apolice = ""
+                        logger.info(f'Sem Match Com Regra Definida para {col}')
+    #return valores extraidos, Apolice não vai na tupple uma vez que nao foi detetado nenhum caso, no entanto está pronto para tal
+    return Body, NumIF, Nome, Subject, Email
+
+#Regra Antiga - Funcional mas não usar
 def EmailWithRegra(mail,logger):
     Body= ''
     Subject = ''
@@ -89,6 +176,7 @@ def EmailWithRegra(mail,logger):
             
 
 def GetEmailsInbox(logger,conn,dictConfig):
+    nomeprocesso = queryByNameDict('NomeProcesso',dictConfig)
     tablename = queryByNameDict("TableName", dictConfig)
     queuetablename=queryByNameDict('QueueTableName',dictConfig)
     mailbox_name =  queryByNameDict("MailboxName",dictConfig)
@@ -97,6 +185,8 @@ def GetEmailsInbox(logger,conn,dictConfig):
     current_Mailbox = InitEmailConn(logger,mailbox_name)
     current_folder = find_folder(current_Mailbox, inbox_name)
     folder_toMove=find_folder(current_Mailbox,folder_toreview)
+    dfRegrasEmailDiscard = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasEmailDiscard',dictConfig),keep_default_na=False)
+    dfRegrasEmailPreTratamento = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasPreTratamento',dictConfig),keep_default_na=False)
     if current_folder:
         logger.info(f"Pasta Encontada: {current_folder.Name}")
         # Aceder aos emails
@@ -120,31 +210,62 @@ def GetEmailsInbox(logger,conn,dictConfig):
                     break
             property_accessor = mail.PropertyAccessor
             message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
-            for emailAddr in queryByNameDict("SenderEmailException",dictConfig).split('|'):
-                if emailAddr == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
-                    Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
-                    columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
-                    data = [(Email,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
-                    #mail.Subject =Subject
-                    break
-                else:
-                    data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
-                    columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
-            logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
-            try:
-                InsertDataBD(conn,tablename,columns,data)
-                logger.info("Email Enviado com Sucesso para a Base de Dados!")
-                columns =['Status','Reference','SpecificContent','Process']
-                data = [('NLP',message_id,''.join(map(str, data)),'RVSIPA2024')]
-                InsertDataBD(conn,queuetablename,columns,data)
-                if mail.Unread:
-                    mail.Unread=False
-                    mail.save()
-                mail.move(folder_toMove)
-            except Exception as e:
-                logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
+            boolDiscard = False
+            for emailAddrDiscard in queryByNameDict('SenderEmailDiscard',dictConfig).split('|'):
+                if emailAddrDiscard == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
+                    boolDiscard = EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmailDiscard)
+                    if boolDiscard:
+                        numEmails = numEmails - 1
+                        break
+            if not boolDiscard:           
+                for emailAddr in queryByNameDict("SenderEmailExtract",dictConfig).split('|'):
+                    if emailAddr == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
+                        Body, NumIF, Nome, Subject, Email =EmailRegraPreTratamento(mail,logger,dfRegrasEmailPreTratamento)
+                        #Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
+                        columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
+                        data = [(Email,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
+                        #mail.Subject =Subject
+                        break
+                    else:
+                        data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
+                        columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
+                logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
+                try:
+                    InsertDataBD(conn,tablename,columns,data)
+                    logger.info("Email Enviado com Sucesso para a Base de Dados!")
+                    columns =['Status','Reference','SpecificContent','Process']
+                    data = [('NLP',message_id,''.join(map(str, data)),nomeprocesso)]
+                    InsertDataBD(conn,queuetablename,columns,data)
+                    if mail.Unread:
+                        mail.Unread=False
+                        mail.save()
+                    mail.move(folder_toMove)
+                except Exception as e:
+                    logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
+                    numEmails = numEmails -1
         return numEmails
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     #if conn:
     #    conn.close
+
+def SearchMailInbox(logger,pastapesquisar,mailbox,emailID):
+    root_folder = InitEmailConn(logger,mailbox)
+    foldertratamento = find_folder(root_folder,pastapesquisar)
+    messages = foldertratamento.Items
+
+    for mail in list(messages):
+        property_accessor = mail.PropertyAccessor
+        message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
+        if message_id == emailID:
+            logger.info('Email Encontrado!')
+            return mail
+
+def MoveEmailToFolder(logger,pastatomove,mailbox,mail):
+    root_folder = InitEmailConn(logger,mailbox)
+    foldertomove = find_folder(root_folder,pastatomove)
+    try:
+        mail.Move(foldertomove)
+        logger.info(f'Email Movido Para a Pasta {pastatomove} com Sucesso!')
+    except Exception as e:
+        logger.error(f'Impossibilidade em Mover Email para a Pasta {pastatomove}')
