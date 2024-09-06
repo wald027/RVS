@@ -4,6 +4,7 @@ import customScripts.databaseSQLExpress as databaseSQLExpress
 from Automation.BusinessRuleExceptions import BusinessRuleException
 from customScripts.customLogging import setup_logging
 from datetime import datetime
+from Automation.MailboxRVS import SendEmail as SendOutlookMail
 
 COLUMN_NAMES = [
     'EmailRemetente','DataEmail','Anexos','EmailID','Subject','Body',
@@ -31,12 +32,12 @@ def main():
     try:
         #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
             #KillAllApplication(app+'.exe',logger)
-        driver = InitApplications()
+        driver = InitApplications(dictConfig)
         logger.info("Aplicações Iniciadas com Sucesso!")
         dfReportOutput=pd.DataFrame(columns=['Data Processamento','Reference','EmailRemetente','NIF','Apolice','Nome','DataEmail','TemaIdentificado','ViaTratamento','MensagemOutput','Estado'])
-
     except Exception as e:
         logger.error(f"Erro ao iniciar Aplicações {e}")
+        SendOutlookMail(logger,(queryByNameDict('EM01_Body',dictConfig)).replace('[E]',str(e)),queryByNameDict('EM01_Subject',dictConfig),queryByNameDict('EM01_To',dictConfig))
         raise e
     while True:
         dfQueueItem:pd.DataFrame
@@ -140,6 +141,9 @@ def main():
             except Exception as e:
                 mail = SearchMailInbox(logger,pastaEmailsTratamento,mailboxname,dfQueueItem.loc[0,"EmailID"])
                 MoveEmailToFolder(logger,pastaEmailsTratamentoManual,mailboxname,mail)
+                #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
+                #    KillAllApplication(app+'.exe',logger)
+                #driver = InitApplications(dictConfig)
                 logger.error(f'Erro de Sistema no Processamento do Registo - {e}')
         else:
             logger.info("Sem QueueItems para tratar.")    
@@ -148,21 +152,19 @@ def main():
     file_path = f'Output\Output_Pedidos_de_Clientes_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
     dfReportOutput.to_excel(file_path, index=False, header=True)
     databaseSQLExpress.SetReportOutput(db,'Report_Output',dfReportOutput)
-    
-    #loginGIO(driver)
-    #navegarGIO(driver)
-    #pesquisarGIO(driver)
-    #ScrapTableGIO(driver)
-    #ScrapDetalhesEntidadeGIO(driver)
-    #ScrapApoliceGIO(driver)
+    #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
+    #    KillAllApplication(app+'.exe',logger)
+    logger.info('Performer Terminado!')
 
-def InitApplications():
-    outlook_path = r"C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
-    Application().start(outlook_path)
+
+def InitApplications(dictConfig):
+    outlook_path = queryByNameDict('outlookPath',dictConfig)
+    #Application().start(outlook_path)
+    os.system(r'"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"  --url "https://webcrm_qld.realvidaseguros.pt/Entity/index"')
     Browser_options = Options()
     Browser_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
-    Path= r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\IntelligentProcessAutomationNLP\Automation\lib\chromedriver.exe"
-    driver = webdriver.Chrome(service=Service(Path),options=Browser_options)
+    browserdriver= queryByNameDict('PathDriverBrowser',dictConfig)
+    driver = webdriver.Chrome(service=Service(browserdriver),options=Browser_options)
     return driver
 
 def KillAllApplication(processname,logger:logging.Logger):

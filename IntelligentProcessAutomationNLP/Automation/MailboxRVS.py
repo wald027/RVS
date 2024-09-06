@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 from customScripts.readConfig import queryByNameDict
 from customScripts.databaseSQLExpress import *
 import pandas as pd
+from pywinauto import Application
+import time
 #eventualmente retirar isto e usar a db connection vinda do dispacther
 #server = 'PT-L162219\SQLEXPRESS'
 #database = 'RealVidaSeguros'
@@ -175,16 +177,16 @@ def EmailWithRegra(mail,logger):
 
             
 
-def GetEmailsInbox(logger,conn,dictConfig):
-    nomeprocesso = queryByNameDict('NomeProcesso',dictConfig)
-    tablename = queryByNameDict("TableName", dictConfig)
-    queuetablename=queryByNameDict('QueueTableName',dictConfig)
+def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename):
+    #nomeprocesso = queryByNameDict('NomeProcesso',dictConfig)
+    #tablename = queryByNameDict("TableName", dictConfig)
+    #queuetablename=queryByNameDict('QueueTableName',dictConfig)
     mailbox_name =  queryByNameDict("MailboxName",dictConfig)
     inbox_name= queryByNameDict("InboxFolder",dictConfig)
     folder_toreview = queryByNameDict("EmailsToMove",dictConfig)
-    current_Mailbox = InitEmailConn(logger,mailbox_name)
-    current_folder = find_folder(current_Mailbox, inbox_name)
-    folder_toMove=find_folder(current_Mailbox,folder_toreview)
+    current_Mailbox = InitEmailConn(logger,mailbox_name) #Aceder Diretório Raiz do Email
+    current_folder = find_folder(current_Mailbox, inbox_name) #Procurar a inbox do Email
+    folder_toMove=find_folder(current_Mailbox,folder_toreview)#Procurar Pasta para onde os emails vão apos lidos
     dfRegrasEmailDiscard = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasEmailDiscard',dictConfig),keep_default_na=False)
     dfRegrasEmailPreTratamento = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasPreTratamento',dictConfig),keep_default_na=False)
     if current_folder:
@@ -269,3 +271,34 @@ def MoveEmailToFolder(logger,pastatomove,mailbox,mail):
         logger.info(f'Email Movido Para a Pasta {pastatomove} com Sucesso!')
     except Exception as e:
         logger.error(f'Impossibilidade em Mover Email para a Pasta {pastatomove}')
+
+def SendEmail(logger,body,subject,To):
+
+    outlook = win32com.client.Dispatch('outlook.application')
+
+    mail = outlook.CreateItem(0) 
+
+    mail.Subject = subject
+    mail.Body = body
+    mail.To = To 
+
+    # Send the email
+    mail.Display()
+
+    time.sleep(15)
+    app = Application(backend='uia').connect(title_re='.*Message.*')
+    main_window = app.window(title_re='.*Message.*')
+    main_window.set_focus()
+    try:
+        main_window.child_window(title="Non-Business", control_type="ListItem").click_input()
+    except:
+        logger.info('Sem Label de Classificação')
+    try:
+        main_window.child_window(title="Send", control_type="Button").click_input()
+        logger.info(f'Email para {To} , Enviado com Sucesso!')
+    except Exception as e:
+        logger.error(f'Impossibilidade em enviar o Email: {e}')
+        raise Exception('Impossibilidade em enviar o Email')
+
+
+    logger.info(f'Email enviado para {To}')

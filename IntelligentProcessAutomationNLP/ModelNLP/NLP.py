@@ -4,10 +4,11 @@ import pandas as pd
 import time
 from transformers import BertTokenizer, BertForSequenceClassification, pipeline
 from ModelNLP import helpers
+from datetime import datetime
 
 
 class EmailClassifier:
-    def __init__(self, base_dir: str, num_labels: int, status_table: str, email_table: str, column_names: list[str], engine,label_map, logger,db) -> None:
+    def __init__(self, base_dir: str, num_labels: int, status_table: str, email_table: str, column_names: list[str], engine,label_map, logger,db,Debug) -> None:
         # Inicializa a classe com os parâmetros necessários
         self.base_dir = base_dir # Diretório base onde estão armazenados o modelo e o tokenizador
         self.num_labels = num_labels # Número de rótulos de classificação
@@ -18,6 +19,7 @@ class EmailClassifier:
         self.cursor = db.cursor() # Cursor para executar comandos SQL
         self.logger = logger # Logger para registrar informações e erros
         self.label_map = label_map #Label Map
+        self.Debug=Debug
 
     def get_emails(self) -> pd.DataFrame:
         # Carrega dados do banco de dados
@@ -37,7 +39,7 @@ class EmailClassifier:
         for i in df["EmailID"].tolist():   
             query = f"""
                 UPDATE {self.status_table}
-                SET Status = 'NLP IN PROGRESS'
+                SET Status = 'NLP IN PROGRESS', [Started NLP] = GETDATE()
                 WHERE Reference = '{i}';
             """  # text() is needed when using sqlalchemy
             self.cursor.execute(query) # Executa a atualização para cada EmailID
@@ -104,7 +106,7 @@ class EmailClassifier:
         for i in df['EmailID'].tolist():
             query = f"""
                 UPDATE {self.status_table}
-                SET Status = 'NLP FINISHED'
+                SET Status = 'NLP FINISHED', [Ended NLP] = GETDATE()
                 WHERE Reference = '{i}';
             """
             self.cursor.execute(query)
@@ -165,5 +167,7 @@ class EmailClassifier:
         except Exception as e:
             self.logger.error(f'Erro NLP a Determinar Nome da Intenção {e}')
         self.logger.info("FEATURES - generated.") # Informa que as características foram geradas
-        #df.to_excel('output_integration.xlsx') # Salva os resultados em um arquivo Excel -- Debug 
+        if self.Debug:
+            file_path = f'ExecTeste\Output_NLP_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
+            df.drop(columns=['Concatenated','Text','DetalheMensagem','Mensagem','Estado','Anexos']).to_excel(file_path) # Salva os resultados em um arquivo Excel -- Modo Teste 
         self.update_database(df) # Atualiza o banco de dados com as novas informações

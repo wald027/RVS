@@ -42,34 +42,44 @@ label_map = {
 def main():
     #iniciar database, custom logger
     dictConfig = readConfig.readConfig(PATH_CONFIG)
+    Debug = readConfig.queryByNameDict('Teste_Dispatcher_NLP',dictConfig)
     server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
     database = readConfig.queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
     driver = readConfig.queryByNameDict('SQLDriver',dictConfig)
-    databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
+    if Debug:#Exec de Teste 
+        databaseLogsTable=readConfig.queryByNameDict('LogsTableName_Teste',dictConfig)
+        STATUS_TABLE = readConfig.queryByNameDict('QueueTableName_Teste',dictConfig)
+        EMAIL_TABLE = readConfig.queryByNameDict('TableName_Teste',dictConfig)
+    else:#Exec Normal
+        databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
+        STATUS_TABLE = readConfig.queryByNameDict('QueueTableName',dictConfig)
+        EMAIL_TABLE = readConfig.queryByNameDict('TableName',dictConfig)
+
     nomeprocesso = readConfig.queryByNameDict('NomeProcesso',dictConfig)
-    STATUS_TABLE = readConfig.queryByNameDict('QueueTableName',dictConfig)
-    EMAIL_TABLE = readConfig.queryByNameDict('TableName',dictConfig)
     BASE_DIR = readConfig.queryByNameDict('Base_Dir',dictConfig)
     NUM_LABELS = readConfig.queryByNameDict('NumLabelsNLP',dictConfig)
-    #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
+        #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
 
 
     customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
     try:
         logger = logging.getLogger(__name__)
+        if Debug:
+            logger.warning('O DISPATCHER ESTÁ A EXECUTAR EM MODO TESTE')
+            logger.warning('OS DADOS VÃO SER ADICIONADOS ÀS TABELAS DE TESTE')
         logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
         time.sleep(1)
         logger.info("Config Lida Com Sucesso!")
         #for app in readConfig.queryByNameDict('AplicacoesDisp',dictConfig).split(','):
         #    KillAllApplication(app+'.exe',logger)
         #InitApplications(readConfig.queryByNameDict('outlookPath',dictConfig),logger)
-        mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig)
+        mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig,nomeprocesso,EMAIL_TABLE,STATUS_TABLE)
         if mailcount > 0:
             logger.info("Emails Extraídos com Sucesso!")
             ENGINE = create_engine(f"mssql+pyodbc://@{server}/{database}?driver={driver}&Trusted_Connection=yes")
             CONN = ENGINE.connect()
-            EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,label_map,logger,db).run()
+            EmailClassifier(BASE_DIR,NUM_LABELS,STATUS_TABLE,EMAIL_TABLE,COLUMN_NAMES,ENGINE,label_map,logger,db,Debug).run()
         else:
             logger.warning('Sem Emails para Tratamento!')  
         time.sleep(5)

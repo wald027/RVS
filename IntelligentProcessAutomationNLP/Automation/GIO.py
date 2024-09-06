@@ -13,6 +13,9 @@ from Automation.BusinessRuleExceptions import *
 import win32com.client
 from pywinauto import Application
 from Automation.MailboxRVS import SearchMailInbox, MoveEmailToFolder
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.action_chains import ActionChains
 #cd diretorio chrome
 #chrome.exe --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"
 
@@ -61,6 +64,12 @@ def navegarGIO(driver:webdriver.Chrome):
 #Faz a pesquisa pelo driver que lhe enviarmos (driver as in Nome, Apolice, NIF e Email))
 def pesquisarGIO(driver:webdriver.Chrome,search,pesquisa:str):
     print(driver.title)
+    try:
+        toast_message = driver.find_element(By.CLASS_NAME, "toast-message")
+        if toast_message:
+            WebDriverWait(driver, 20).until(EC.invisibility_of_element(toast_message))
+    except:
+        ""
     searchButton = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[6]/div/button[1]')
     driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[6]/div/button[2]').click()
     time.sleep(2)
@@ -195,8 +204,9 @@ def send_email(mail, body,logger:logging.Logger,To, attachments=None):
     reply.To = 'brunofilipe.lobo@cgi.com' #Usado em dev para testesssss
     #reply.To = To
     reply.Body = body + reply.Body
-    for attachment_path in attachments:
-        reply.Attachments.Add(attachment_path)
+    if attachments: 
+        for attachment_path in attachments:
+            reply.Attachments.Add(attachment_path)
 
     reply.Display()
 
@@ -218,8 +228,12 @@ def send_email(mail, body,logger:logging.Logger,To, attachments=None):
 
 def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.DataFrame,email:str):
     logger.info('A Proceder com o Registo do Contacto com o Cliente no GIO')
+    time.sleep(5)
     #click Contactos
-    driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[1]').click()
+    try:
+        driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[1]').click()
+    except:
+        driver.find_element(By.CSS_SELECTOR, ".btn.col-sm-12.col-md-12.col-lg-5.m-1.text-light").click()
     time.sleep(5)
     #+#click Contactos
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[1]/div[2]/div/div/div[1]/button').click()
@@ -242,9 +256,14 @@ def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.Data
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[9]/select/option[2]').click()
     time.sleep(5)
     desc = driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[2]/div[16]/textarea')
+    #desc.click()
     desc.clear()
-    textodesc = f"Assunto do Email: {df.loc[0,'Subject']} \nCorpo do Email:  {df.loc[0,'Body']}\nTema NLP: {df.loc[0,'IDIntencao']}\nTemplate Resposta Enviado: {email}"
-    desc.send_keys(textodesc)
+    textodesc = f"Assunto do Email: {df.loc[0,'Subject']} \nCorpo do Email:  \nTema NLP: {df.loc[0,'IDIntencao']}\nTemplate Resposta Enviado: {email}"
+    #{df.loc[0,'Body']}
+    #desc.send_keys(textodesc)
+    actions = ActionChains(driver)
+    actions.move_to_element(desc).click().send_keys(textodesc).perform()
+
     time.sleep(5)
     #click guardar
     driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div[2]/div[1]/div/div/div/form/div[7]/div/button[2]').click()
@@ -253,6 +272,13 @@ def registarcontactoGIO(driver:webdriver.Chrome,logger:logging.Logger,df:pd.Data
 
 
 def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logger:logging.Logger):
+    try:
+        driver.find_element(By.ID,'deleteData').click()
+        toast_message = driver.find_element(By.CLASS_NAME, "toast-message")
+        if toast_message:
+            WebDriverWait(driver, 10).until(EC.invisibility_of_element(toast_message))
+    except:
+        ""
     time.sleep(3)
     searchEmail = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[4]/input')
     searchName = driver.find_element(By.XPATH,'/html/body/div[2]/div/form/div/div/div/div[1]/input')
@@ -369,15 +395,18 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                             pesquisarGIO(driver,search,p.strip())
                             dfGIO = ScrapTableGIO(driver,logger)
                             if not dfGIO.empty:
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
+                                webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform() 
                                 raise BusinessRuleException("Registo com Cliente RealVida - Sem Match Com Nenhuma das Regras Definidas")
                             else:
                                 boolMatchNA = True
                                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()
                                 webdriver.ActionChains(driver).send_keys(Keys.ESCAPE).perform()                           
-    elif not boolMatch and any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'].values):
+    elif not boolMatch and any(val == dfInfoRegisto.loc[0,'IDIntencao'] for val in dfRegrasNA['ID'][dfRegrasNA.map(lambda x: x ==dfInfoRegisto.loc[0,'IDIntencao']).any(axis=1)].values):
         rowAnalise = rowAnalise[rowAnalise.drop(columns='ID').map(lambda x: x == 'NA').all(axis=1)]
-        dfInfoRegisto.loc[0,'IDIntencao'] = '3NA'
-        
+        if dfInfoRegisto.loc[0,'IDIntencao'] == '3':
+            dfInfoRegisto.loc[0,'IDIntencao'] = '3NA'
+    #REVER ESTA CONDICAO EM CIMA
     if boolMatchNA == True:
         logger.warning('Impossibilidade de Identificação de Cliente RealVida')
         dfInfoRegisto.loc[0,'IDIntencao'] = 'NA'
@@ -389,6 +418,7 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
     if dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasIdentifAltern[dfRegrasIdentifAltern.drop(columns='ID').map(lambda x: x == 'Sim').all(axis=1)].values:
         dfRegrasSIM = dfRegrasIdentifAltern[dfRegrasIdentifAltern.drop(columns='ID').map(lambda x: x == 'Sim').all(axis=1)]
         row = dfRegrasSIM.loc[dfRegrasSIM['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+        logger.info('A Proceder com a Verificação do Email do Cliente....')
         for col in dfRegrasSIM.columns:
             if col == colunaMatch and row[col].values == 'Sim':
                 time.sleep(5)
@@ -396,14 +426,20 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                 #print(EmailCliente=='')
                 #print(EmailCliente==' ')
                 #print(EmailCliente=='x@x.pt')
-                if not EmailCliente == '' and not EmailCliente == 'x@x.pt': #colocar config email/emails permitidos
-                    raise BusinessRuleException(f'Registo contém um email: {EmailCliente}, de acordo com a Regra tem de ser @realvida ou vazio.')
+                email = 'x@x.pt' # QA
+                #email = 'clientesemmail@realvidaseguros.pt' #PRD
+                if not EmailCliente == '' and not EmailCliente == email: #colocar config email/emails permitidos
+                    raise BusinessRuleException(f'Registo contém um email {EmailCliente}, de acordo com a Regra tem de ser {email} ou vazio.')
+                logger.info('Verificação efetuada com Sucesso!')
     
     #Verificação de Apolices Ativas (Caso necessário)
     dfRegrasApoliceAtivas = pd.read_excel(file_path,keep_default_na=False,sheet_name='ApolAtivas')
     #Apenas entra aqui se o ID identificado tenha alguma coluna sem 'NA' else não entrará
-    if not dfInfoRegisto.loc[0,'IDIntencao'] in dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)] and boolMatch:
+    
+    filtered_df_ApoliceAtiva=dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: x =='NA').all(axis=1)]
+    if not dfInfoRegisto.loc[0,'IDIntencao'] in filtered_df_ApoliceAtiva['ID'].values and boolMatch:
         rowAnalise = dfRegrasApoliceAtivas[dfRegrasApoliceAtivas.drop(columns='ID').map(lambda x: (x !='NA')).any(axis=1)].loc[dfRegrasApoliceAtivas['ID'] == dfInfoRegisto.loc[0,'IDIntencao']]
+        time.sleep(5)
         driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div/div[2]/div/div[2]/a[4]').click()
         time.sleep(5)
         dfApolicesAtivas = ScrapApoliceGIO(driver,logger)
@@ -464,12 +500,12 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                                     #print(RegraModalidadeVersao)
                                     if 'X' in RegraModalidadeVersao.split('/')[0]:
                                         if any(RegraModalidadeVersao.split('/')[1] == ApoliceVersao.split('/')[1] for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
-                                            raise BusinessRuleException("")
+                                            raise BusinessRuleException("Sem Match Com Regra")
                                     elif 'X' in RegraModalidadeVersao.split('/')[1]:
                                         if any(RegraModalidadeVersao.split('/')[0] == ApoliceVersao.split('/')[0] for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
-                                            raise BusinessRuleException("")
+                                            raise BusinessRuleException("Sem Match Com Regra")
                                     elif any(RegraModalidadeVersao == ApoliceVersao for ApoliceVersao in dfApolicesAtivas['ApoliceVersao']):
-                                            raise BusinessRuleException("")
+                                            raise BusinessRuleException("Sem Match Com Regra")
                             elif not dfApolicesAtivas[~dfApolicesAtivas['ApoliceVersao'].isin(listMatches)].empty:
                                 raise BusinessRuleException('Sem Match Com Regra')
                             boolMatch=True
@@ -534,10 +570,12 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
     email = ''
     for body in rowEmails['Template']:
         email = body
+        print(body)
         break 
     #print(rowAnalise)
     #print(rowAnalise.drop(columns='ID').map(lambda x :x == 'NA').all(axis=1).empty)
     #print(rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any())
+    #Ver ISTO
     if not rowAnalise.drop(columns='ID').eq('NA').all(axis=1).any() and not rowAnalise.drop(columns='ID').eq('Não').all(axis=1).any():
         registarcontactoGIO(driver,logger,dfInfoRegisto,email)
         #atividade final
@@ -555,7 +593,7 @@ def EnviarEmail(dfInfoRegisto:pd.DataFrame,dictConfig,logger:logging.Logger):
     for body in rowEmails['Template']:
         mail = SearchMailInbox(logger,FolderTratamentoRPA,mailbox_name,dfInfoRegisto.loc[0,'EmailID'])
         if mail:
-            send_email(mail,body,logger)
+            send_email(mail,body,logger,To)
             break
         else:
             raise BusinessRuleException('Email original não encontrado para efetuar resposta')
