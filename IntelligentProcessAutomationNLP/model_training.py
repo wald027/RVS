@@ -23,7 +23,7 @@ import spacy
 from customScripts.customLogging import setup_logging
 from customScripts.databaseSQLExpress import ConnectToBD
 from customScripts.readConfig import *
-from MailboxTraining import extract_emails_from_folder, dataframe, dictConfig
+#from MailboxTraining import extract_emails_from_folder, dataframe, dictConfig
 
 #import sys
 #sys.path.append('/content/drive/MyDrive/CGI/Email Answering')
@@ -47,13 +47,13 @@ TRAINED_MODEL_PATH = BASE_DIR + "model_3"
 # Diretório onde estão armazenados os arquivos de emails
 EMAILS_DIRECTORY = BASE_DIR + "Dados Classificados/" 
 # Nome do servidor SQL
-server = 'PT-L163255\SQLEXPRESS01'
+server = 'PT-L164962\SQLEXPRESS'
 # Nome da base de dados
 DATABASE = "RealVidaSeguros"
 # Conecta ao banco de dados usando as credenciais fornecidas
 db = ConnectToBD(server,DATABASE)
 # Configura o sistema de logs para registrar eventos e erros
-setup_logging(db,'LOGS_TREINO')
+setup_logging(db,'LOGS_TREINO','aa')
 # Cria um objeto logger para registrar eventos durante a execução do código
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ def import_msg_to_df(directory, extension='.msg', labelled=False):
 '''
 
 
-filepath = r'C:\Users\nayara.rodrigues\Documents\RVS-main\RVS_emails_20240823 (1) - Copy.xlsx'
+filepath = r'C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\RVS_emails_20240823 (1) - Copy.xlsx'
 #filepath = "c:\\Users\\nayara.rodrigues\\Documents\\RVS-main\\IntelligentProcessAutomationNLP\\ModelNLP\\helpers.py"
 #filepath = "C:\\Users\\nayara.rodrigues\\Documents\\RVS-main\\Modelo de Dados NLP_emails15.xlsx"
 #df_original = pd.read_excel(filepath)
@@ -700,7 +700,8 @@ print(train_.shape)
 print(test_.shape)
 
 ###########
-
+GPU = True
+DEVICE = "cuda" if GPU else "cpu"
 
 # Load the BERT tokenizer and model
 tokenizer = BertTokenizer.from_pretrained(MODEL_PATH, truncation=True, padding="max_length", max_length=128, return_tensors='pt')
@@ -709,7 +710,7 @@ model = BertForSequenceClassification.from_pretrained(
     num_labels=NUM_LABELS,
     hidden_dropout_prob=0.2,
     attention_probs_dropout_prob=0.1
-)#.to(DEVICE)
+).to(DEVICE)
 
 # Preprocessing and Preparing Dataset
 def preprocess_function(df):
@@ -751,7 +752,7 @@ training_args = TrainingArguments(
     greater_is_better=True,
     metric_for_best_model="accuracy",
     group_by_length=True,
-    #fp16=GPU,
+    fp16=GPU,
 
 )
 
@@ -779,7 +780,7 @@ trainer.model.save_pretrained(TRAINED_MODEL_PATH)
 model = BertForSequenceClassification.from_pretrained(TRAINED_MODEL_PATH, num_labels=NUM_LABELS)
 tokenizer = BertTokenizer.from_pretrained(MODEL_PATH, truncation=True, padding="max_length", max_length=128)
 
-#model.to(DEVICE)
+model.to(DEVICE)
 
 clf = pipeline("text-classification", model=model, tokenizer=tokenizer, truncation=True, padding="max_length", max_length=128)#, device=DEVICE)
 preds = clf(test_["text"].to_list())
@@ -795,8 +796,7 @@ df_final["Mode"] = list(map(lambda x:"TEST" if x in list (X_test.index) else "TR
 # Get predictions
 model = BertForSequenceClassification.from_pretrained(TRAINED_MODEL_PATH, num_labels=NUM_LABELS)
 tokenizer = BertTokenizer.from_pretrained(MODEL_PATH, truncation=True, padding="max_length", max_length=128)
-
-#model.to(DEVICE)
+model.to(DEVICE)
 
 clf = pipeline("text-classification", model=model, tokenizer=tokenizer, truncation=True, padding="max_length", max_length=128)#, device=DEVICE)
 

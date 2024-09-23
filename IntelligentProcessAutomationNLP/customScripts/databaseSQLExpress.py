@@ -82,7 +82,7 @@ def SetReportOutput(conn:pyodbc.Connection, table_name,df:pd.DataFrame):
     sql_insert=f"INSERT INTO {table_name} ({columns_str}) values ({placeholders})"
 
     for i, row in df.iterrows():
-        row_as_str = [str(value) for value in row]
+        row_as_str = [str(value).replace(",","") for value in row]
         row_as_str = [None if value.strip() == "" else value for value in row_as_str]
         cursor.execute(sql_insert,tuple(row_as_str))
     conn.commit()

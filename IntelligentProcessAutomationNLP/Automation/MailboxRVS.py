@@ -202,11 +202,12 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
         #messages = messages.Restrict("[Subject] = 'Sample Report'")
         numEmails = messages.count 
         logger.info(f'Existem {messages.count} emails na pasta {current_folder.Name}') #nome da pasta
-        Attachments='False'
         #https://learn.microsoft.com/en-us/dotnet/api/microsoft.office.interop.outlook.mailitem?view=outlook-pia conteudo email
         for mail in list(messages):
+            Attachments='False'
             html_body=mail.HTMLBody
             for attachment in mail.attachments:
+                print(attachment.Filename)
                 if attachment.Filename not in html_body:
                     Attachments='True'
                     break
@@ -242,6 +243,8 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
                         mail.Unread=False
                         mail.save()
                     mail.move(folder_toMove)
+                    logger.info(f"Email Movido para a Pasta {folder_toMove}")
+                    time.sleep(1)
                 except Exception as e:
                     logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
                     numEmails = numEmails -1
@@ -264,10 +267,12 @@ def SearchMailInbox(logger,pastapesquisar,mailbox,emailID):
             return mail
 
 def MoveEmailToFolder(logger,pastatomove,mailbox,mail):
+    time.sleep(5)
     root_folder = InitEmailConn(logger,mailbox)
     foldertomove = find_folder(root_folder,pastatomove)
     try:
         mail.Move(foldertomove)
+        time.sleep(5)
         logger.info(f'Email Movido Para a Pasta {pastatomove} com Sucesso!')
     except Exception as e:
         logger.error(f'Impossibilidade em Mover Email para a Pasta {pastatomove}')

@@ -5,6 +5,7 @@ from Automation.BusinessRuleExceptions import BusinessRuleException
 from customScripts.customLogging import setup_logging
 from datetime import datetime
 from Automation.MailboxRVS import SendEmail as SendOutlookMail
+import subprocess
 
 COLUMN_NAMES = [
     'EmailRemetente','DataEmail','Anexos','EmailID','Subject','Body',
@@ -12,7 +13,13 @@ COLUMN_NAMES = [
 ]
 
 def main():
-    dictConfig = readConfig(r'Config.xlsx')
+    try:
+        dictConfig = readConfig(r'Config.xlsx')
+    except Exception as e:
+        #print(f'Erro ao tentar ler a Config.xlsx, {e}')
+        logger = logging.getLogger(__name__)
+        logger.info(f'Erro ao tentar ler a Config.xlsx, {e}')
+        raise e
     server = queryByNameDict('SQLExpressServer',dictConfig)
     database = queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
@@ -27,14 +34,12 @@ def main():
     pastaEmailsTratamento = queryByNameDict('EmailsToMove',dictConfig)
     pastaEmailsTratamentoManual = queryByNameDict('EmailTratamentoManualMove',dictConfig) 
     pastaEmailsSucesso = queryByNameDict('EmailSucessoMove',dictConfig)
-    #driver = OpenGIO(logger)
-    #attach a sessão já aberta
     try:
-        #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
-            #KillAllApplication(app+'.exe',logger)
+        for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
+            KillAllApplication(app+'.exe',logger)
         driver = InitApplications(dictConfig)
         logger.info("Aplicações Iniciadas com Sucesso!")
-        dfReportOutput=pd.DataFrame(columns=['Data Processamento','Reference','EmailRemetente','NIF','Apolice','Nome','DataEmail','TemaIdentificado','ViaTratamento','MensagemOutput','Estado'])
+        dfReportOutput=pd.DataFrame(columns=['Data Processamento','Reference','EmailRemetente','NIF','Apolice','Nome','DataEmail','TemaIdentificado','ViaTratamento','Estado','DetalheMensagem','MensagemOutput','TemaReal'])
     except Exception as e:
         logger.error(f"Erro ao iniciar Aplicações {e}")
         SendOutlookMail(logger,(queryByNameDict('EM01_Body',dictConfig)).replace('[E]',str(e)),queryByNameDict('EM01_Subject',dictConfig),queryByNameDict('EM01_To',dictConfig))
@@ -48,12 +53,12 @@ def main():
             logger.error(f"Erro ao tentar is buscar QueueItem {e}")
         
         if not dfQueueItem.empty:
-            logger.info(f'A tratar o registo com o EmailID/Reference {dfQueueItem["EmailID"].to_string().replace("0","").replace(" ","")} e com Intenção Identificada pelo NLP de {dfQueueItem["IDIntencao"].to_string().replace("0","").replace(" ","")}')
+            logger.info(f'A tratar o registo com o EmailID/Reference {dfQueueItem.loc[0,"EmailID"]} e com Intenção Identificada pelo NLP de {dfQueueItem.loc[0,"IDIntencao"]}')
             try:
                 #Atividade NLP (Verificar Dados providenciados pelo mesmo)
                 try:
                     logger.info('A Verificar Dados Vindos do NLP....')
-                    #IDbd = dfQueueItem.loc[0,'IDIntencao']
+                    IDbd = dfQueueItem.loc[0,'IDIntencao']
                     if dfQueueItem.loc[0,'Status'] == 'NLP FAILED':
                         raise Exception(f'Falha do NLP ao Processar Registo')
                     if dfQueueItem.loc[0,'Score'] < queryByNameDict('TrustScore',dictConfig):
@@ -67,7 +72,7 @@ def main():
                     dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
                     dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade do NLP'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
                     raise BusinessRuleException(e)
                 except Exception as e:
@@ -76,7 +81,7 @@ def main():
                     dfQueueItem.loc[0,"DetalheMensagem"] = ''
                     dfQueueItem.loc[0,"Estado"] = 'Erro de Sistema'
                     dfQueueItem.loc[0,"Mensagem"] = 'Indisponilibidade do NLP'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed","Erro de Sistema",e)
                     raise Exception(e) 
                 #Atividade GIO
@@ -88,20 +93,20 @@ def main():
                     logger.info('Atividade Processada com Sucesso!')
                 except BusinessRuleException as e:
                     logger.error(f"{e}")
-                    dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
+                    #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
                     dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
                     dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade de obter dados no GIO'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
                     raise BusinessRuleException(e)
                 except Exception as e:
                     logger.error(f'SystemError no processamento do registo: {e}')
-                    dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
+                    #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
                     dfQueueItem.loc[0,"DetalheMensagem"] = ''
                     dfQueueItem.loc[0,"Estado"] = 'Erro de Sistema'
                     dfQueueItem.loc[0,"Mensagem"] = 'Indisponilibidade em obter dados no GIO'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed","Erro de Sistema",e)
                     raise Exception(e) 
                 #Atividade EMail
@@ -112,26 +117,26 @@ def main():
                     dfQueueItem['Mensagem'] = 'Sucesso no tratamento'
                     dfQueueItem['Estado'] = 'Processado'
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Sucesso",'Processado','Tratamento realizado com Sucesso')
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via Email')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via Email',IDbd)
                     mail = SearchMailInbox(logger,pastaEmailsTratamento,mailboxname,dfQueueItem.loc[0,"EmailID"])
                     MoveEmailToFolder(logger,pastaEmailsSucesso,mailboxname,mail)
                     logger.info('Registo Processado com Sucesso!')
                 except BusinessRuleException as e:
                     logger.error(f"{e}")
-                    dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
+                    #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
                     dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
                     dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade em enviar Email pelo Outlook'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
                     raise BusinessRuleException(e)
                 except Exception as e:
                     logger.error(f'SystemError no processamento do registo: {e}')
-                    dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
+                    #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
                     dfQueueItem.loc[0,"DetalheMensagem"] = ''
                     dfQueueItem.loc[0,"Estado"] = 'Erro de Sistema'
                     dfQueueItem.loc[0,"Mensagem"] = 'Indisponibilidade em enviar Email pelo Outlook'
-                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA')
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed","Erro de Sistema",e)
                     raise Exception(e)  
             except BusinessRuleException as e:
@@ -141,30 +146,40 @@ def main():
             except Exception as e:
                 mail = SearchMailInbox(logger,pastaEmailsTratamento,mailboxname,dfQueueItem.loc[0,"EmailID"])
                 MoveEmailToFolder(logger,pastaEmailsTratamentoManual,mailboxname,mail)
-                #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
-                #    KillAllApplication(app+'.exe',logger)
-                #driver = InitApplications(dictConfig)
+                for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
+                   KillAllApplication(app+'.exe',logger)
+                driver = InitApplications(dictConfig)
                 logger.error(f'Erro de Sistema no Processamento do Registo - {e}')
         else:
             logger.info("Sem QueueItems para tratar.")    
             break
     #print(dfReportOutput)
     file_path = f'Output\Output_Pedidos_de_Clientes_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
-    dfReportOutput.to_excel(file_path, index=False, header=True)
-    databaseSQLExpress.SetReportOutput(db,'Report_Output',dfReportOutput)
+    dfReportOutput.drop(columns='TemaReal').to_excel(file_path, index=False, header=True)
+    databaseSQLExpress.SetReportOutput(db,'Report_Output',dfReportOutput.drop(columns='TemaReal'))
     #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
     #    KillAllApplication(app+'.exe',logger)
+    body = queryByNameDict('EM02_Body',dictConfig).replace('[A]',str(len(dfReportOutput))).replace('[B]',str((dfReportOutput[dfReportOutput['Estado']=='Processado'].shape[0]))).replace('[C]',str((dfReportOutput[dfReportOutput['Estado'] != 'Processado'].shape[0]))).replace('[D]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '0')].shape[0]))).replace('[E]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '1')].shape[0]))).replace('[F]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '2')].shape[0]))).replace('[G]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '3')].shape[0]))).replace('[H]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '5')].shape[0]))).replace('[I]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '6')].shape[0]))).replace('[J]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '7')].shape[0]))).replace('[K]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '8')].shape[0]))).replace('[L]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '9')].shape[0]))).replace('[M]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '10')].shape[0]))).replace('[N]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == 'NA')].shape[0])))
+    SendOutlookMail(logger,body,queryByNameDict('EM02_Subject',dictConfig),queryByNameDict('EM02_To',dictConfig))
     logger.info('Performer Terminado!')
 
 
 def InitApplications(dictConfig):
     outlook_path = queryByNameDict('outlookPath',dictConfig)
-    #Application().start(outlook_path)
-    os.system(r'"C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222 --user-data-dir="C:\selenium\chrome-profile"  --url "https://webcrm_qld.realvidaseguros.pt/Entity/index"')
+    outlook = Application().start(outlook_path)
+    time.sleep(5)
+    outlook.window(title_re=".*Inbox.*").minimize()
+    chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
+    arguments = r"--remote-debugging-port=9222 --user-data-dir=C:\selenium\chrome-profile --url https://webcrm_qld.realvidaseguros.pt"
+    subprocess.Popen([chrome_path] + arguments.split())
+    #os.system(r"startChrome.bat")
     Browser_options = Options()
     Browser_options.add_experimental_option("debuggerAddress", "127.0.0.1:9222")
     browserdriver= queryByNameDict('PathDriverBrowser',dictConfig)
     driver = webdriver.Chrome(service=Service(browserdriver),options=Browser_options)
+    driver.maximize_window()
+    driver.implicitly_wait(10)
+    navegarGIO(driver)
     return driver
 
 def KillAllApplication(processname,logger:logging.Logger):
@@ -175,7 +190,7 @@ def KillAllApplication(processname,logger:logging.Logger):
     except Exception as e:
         logger.warning(e)
 
-def prepararOutput(df:pd.DataFrame,viatratamento):
+def prepararOutput(df:pd.DataFrame,viatratamento,idBD):
     for index,row in df.iterrows():
         new_row = {
             'Data Processamento': f'{datetime.now().strftime("%d-%m-%Y %H:%M:%S")}',
@@ -185,10 +200,12 @@ def prepararOutput(df:pd.DataFrame,viatratamento):
             'Apolice': f"{row['Apolice']}",
             'Nome': f"{row['Nome']}",
             'DataEmail': f"{row['DataEmail']}",
-            'TemaIdentificado': f"{row['IDIntencao']}",
+            'TemaIdentificado': f"{idBD}",
             'ViaTratamento': f"{viatratamento}",
             'MensagemOutput': f"{row['Mensagem']}",
-            'Estado': f"{row['Estado']}"
+            'DetalheMensagem': f'{row["DetalheMensagem"]}',
+            'Estado': f"{row['Estado']}",
+            'TemaReal':f"{row['IDIntencao']}"
         }
     return new_row
 
