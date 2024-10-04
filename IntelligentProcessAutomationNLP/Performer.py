@@ -16,9 +16,9 @@ def main():
     try:
         dictConfig = readConfig(r'Config.xlsx')
     except Exception as e:
-        #print(f'Erro ao tentar ler a Config.xlsx, {e}')
-        logger = logging.getLogger(__name__)
-        logger.info(f'Erro ao tentar ler a Config.xlsx, {e}')
+        print(f'Erro ao tentar ler a Config.xlsx, {e}')
+        #logger = logging.getLogger(__name__)
+        #logger.info(f'Erro ao tentar ler a Config.xlsx, {e}')
         raise e
     server = queryByNameDict('SQLExpressServer',dictConfig)
     database = queryByNameDict('Database',dictConfig)
@@ -69,7 +69,7 @@ def main():
                 except BusinessRuleException as e:
                     logger.error(f"{e}")
                     #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
-                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
+                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip().casefold().capitalize()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
                     dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade do NLP'
                     dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
@@ -94,7 +94,7 @@ def main():
                 except BusinessRuleException as e:
                     logger.error(f"{e}")
                     #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
-                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
+                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip().casefold().capitalize()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
                     dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade de obter dados no GIO'
                     dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
@@ -111,7 +111,7 @@ def main():
                     raise Exception(e) 
                 #Atividade EMail
                 try:
-                    logger.info('A Processar a Atividade de Obtenção Envio de Email.....')
+                    logger.info('A Processar a Atividade de Envio de Email.....')
                     EnviarEmail(dfQueueItem,dictConfig,logger)
                     dfQueueItem['DetalheMensagem'] = 'Tratamento realizado com Sucesso'
                     dfQueueItem['Mensagem'] = 'Sucesso no tratamento'
@@ -124,9 +124,9 @@ def main():
                 except BusinessRuleException as e:
                     logger.error(f"{e}")
                     #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
-                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip()
+                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip().casefold().capitalize()
                     dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
-                    dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade em enviar Email pelo Outlook'
+                    dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade em enviar email pelo outlook'
                     dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
                     raise BusinessRuleException(e)
@@ -135,21 +135,28 @@ def main():
                     #dfQueueItem.loc[0,'IDIntencao'] = IDbd#solucao temporaria
                     dfQueueItem.loc[0,"DetalheMensagem"] = ''
                     dfQueueItem.loc[0,"Estado"] = 'Erro de Sistema'
-                    dfQueueItem.loc[0,"Mensagem"] = 'Indisponibilidade em enviar Email pelo Outlook'
+                    dfQueueItem.loc[0,"Mensagem"] = 'Indisponibilidade em enviar email pelo outlook'
                     dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                     databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed","Erro de Sistema",e)
                     raise Exception(e)  
             except BusinessRuleException as e:
                 mail = SearchMailInbox(logger,pastaEmailsTratamento,mailboxname,dfQueueItem.loc[0,"EmailID"])
+                mail.Unread=True
                 MoveEmailToFolder(logger,pastaEmailsTratamentoManual,mailboxname,mail)
                 logger.error(f'{(str(e).split(":")[1]+":"+str(e).split(":")[2]).strip()}') #Fix para não aparecer "Definição de Negocio:" duas vezes seguidas
             except Exception as e:
                 mail = SearchMailInbox(logger,pastaEmailsTratamento,mailboxname,dfQueueItem.loc[0,"EmailID"])
+                mail.Unread=True
                 MoveEmailToFolder(logger,pastaEmailsTratamentoManual,mailboxname,mail)
                 for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
                    KillAllApplication(app+'.exe',logger)
-                driver = InitApplications(dictConfig)
                 logger.error(f'Erro de Sistema no Processamento do Registo - {e}')
+                try:
+                    driver = InitApplications(dictConfig)
+                except Exception as e:
+                    logger.error(f"Erro ao reiniciar Aplicações {e}")
+                    SendOutlookMail(logger,(queryByNameDict('EM01_Body',dictConfig)).replace('[E]',str(e)),queryByNameDict('EM01_Subject',dictConfig),queryByNameDict('EM01_To',dictConfig))
+                    raise e
         else:
             logger.info("Sem QueueItems para tratar.")    
             break
@@ -159,7 +166,7 @@ def main():
     databaseSQLExpress.SetReportOutput(db,'Report_Output',dfReportOutput.drop(columns='TemaReal'))
     #for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
     #    KillAllApplication(app+'.exe',logger)
-    body = queryByNameDict('EM02_Body',dictConfig).replace('[A]',str(len(dfReportOutput))).replace('[B]',str((dfReportOutput[dfReportOutput['Estado']=='Processado'].shape[0]))).replace('[C]',str((dfReportOutput[dfReportOutput['Estado'] != 'Processado'].shape[0]))).replace('[D]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '0')].shape[0]))).replace('[E]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '1')].shape[0]))).replace('[F]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '2')].shape[0]))).replace('[G]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '3')].shape[0]))).replace('[H]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '5')].shape[0]))).replace('[I]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '6')].shape[0]))).replace('[J]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '7')].shape[0]))).replace('[K]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '8')].shape[0]))).replace('[L]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '9')].shape[0]))).replace('[M]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '10')].shape[0]))).replace('[N]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == 'NA')].shape[0])))
+    body = queryByNameDict('EM02_Body',dictConfig).replace('[A]',str(len(dfReportOutput))).replace('[B]',str((dfReportOutput[dfReportOutput['Estado']=='Processado'].shape[0]))).replace('[C]',str((dfReportOutput[dfReportOutput['Estado'] != 'Processado'].shape[0]))).replace('[D]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '0')].shape[0]))).replace('[E]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '1')].shape[0]))).replace('[F]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '2')].shape[0]))).replace('[G]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'].isin(['3', '3NA']))].shape[0]))).replace('[H]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '5')].shape[0]))).replace('[I]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '6')].shape[0]))).replace('[J]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '7')].shape[0]))).replace('[K]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '8')].shape[0]))).replace('[L]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '9')].shape[0]))).replace('[M]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '10')].shape[0]))).replace('[N]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == 'NA')].shape[0])))
     SendOutlookMail(logger,body,queryByNameDict('EM02_Subject',dictConfig),queryByNameDict('EM02_To',dictConfig))
     logger.info('Performer Terminado!')
 
@@ -169,8 +176,9 @@ def InitApplications(dictConfig):
     outlook = Application().start(outlook_path)
     time.sleep(5)
     outlook.window(title_re=".*Inbox.*").minimize()
-    chrome_path = r"C:\Program Files\Google\Chrome\Application\chrome.exe"
-    arguments = r"--remote-debugging-port=9222 --user-data-dir=C:\selenium\chrome-profile --url https://webcrm_qld.realvidaseguros.pt"
+    chrome_path = queryByNameDict('ChromePath',dictConfig)
+    urlGIO = queryByNameDict('LinkGIO',dictConfig)
+    arguments = fr"--remote-debugging-port=9222 --user-data-dir=C:\selenium\chrome-profile --url {urlGIO} --headless"
     subprocess.Popen([chrome_path] + arguments.split())
     #os.system(r"startChrome.bat")
     Browser_options = Options()

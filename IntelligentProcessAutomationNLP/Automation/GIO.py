@@ -459,7 +459,11 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
                 #print(EmailCliente=='')
                 #print(EmailCliente==' ')
                 #print(EmailCliente=='x@x.pt')
-                email = 'x@x.pt' # QA
+                try:
+                    email = queryByNameDict('ClienteSemEmailEmail',dictConfig)
+                except:
+                    email = 'x@x.pt'
+                #email = 'x@x.pt' # QA
                 #email = 'clientesemmail@realvidaseguros.pt' #PRD
                 if not EmailCliente == '' and not EmailCliente == email: #colocar config email/emails permitidos
                     raise BusinessRuleException(f'Registo contém um email {EmailCliente}, de acordo com a Regra tem de ser {email} ou vazio.')

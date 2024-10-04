@@ -244,7 +244,7 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
                         mail.save()
                     mail.move(folder_toMove)
                     logger.info(f"Email Movido para a Pasta {folder_toMove}")
-                    time.sleep(1)
+                    time.sleep(3)
                 except Exception as e:
                     logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
                     numEmails = numEmails -1

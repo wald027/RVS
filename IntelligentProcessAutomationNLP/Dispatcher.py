@@ -8,7 +8,7 @@ from ModelNLP.NLP import EmailClassifier
 from sqlalchemy import create_engine, MetaData, Table, Column, Integer, String
 import os
 from pywinauto import Application
-
+import pandas as pd
 #NUM_LABELS = 11
 #BASE_DIR = 'realvidaseguros/'
 #TOKENIZER_PATH = BASE_DIR + "tokenizer"
@@ -24,20 +24,6 @@ COLUMN_NAMES = [
     'NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes',
     'DetalheMensagem', 'Mensagem', 'Estado','EmailCurto','NomeIntencao'
 ]
-
-label_map = {
-    '0': 'Reforços apólices financeiras',
-    '1': 'Atualização dados pessoais A',
-    '2': 'Atualização dados pessoais B',
-    '3': 'Atualização de capital da apólice',
-    #4: 'Pedido de informação da apólice',
-    '5': 'Pedido de resgate de apólice financeira',
-    '6': 'Acesso à Área Reservada de Clientes (MyRealVida)',
-    '7': 'Alteração de IBAN de débito',
-    '8': 'Pedido de anulação de apólices Universo',
-    '9': 'Participação de sinistros Acidentes Pessoais',
-    '10': 'Participação de sinistros Vida Risco'
-}
 
 def main():
     #iniciar database, custom logger
@@ -59,8 +45,10 @@ def main():
     nomeprocesso = readConfig.queryByNameDict('NomeProcesso',dictConfig)
     BASE_DIR = readConfig.queryByNameDict('Base_Dir',dictConfig)
     NUM_LABELS = readConfig.queryByNameDict('NumLabelsNLP',dictConfig)
-        #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
-
+    #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
+    intencoes_filepath = readConfig.queryByNameDict('PathConfigIntencoes',dictConfig)
+    dfDict = pd.read_excel(intencoes_filepath,sheet_name='LabelMap')
+    label_map = dict(zip(dfDict['Key'].astype(str), dfDict['Value'].astype(str)))
 
     customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
     try:
