@@ -149,7 +149,7 @@ def EmailWithRegra(mail,logger):
     logger.info(f"Detetado Email com Regra vindo de: {mail.SenderName + f' <{mail.SenderEmailAddress}>'}")
     NumIF = mail.Subject.split("-")[0].replace("NIF","").replace(" ","")
     if not NumIF == "" and len(NumIF) > 8 and len(NumIF) < 10 and NumIF.isnumeric() == True:
-        logger.info(f"NIF extraído com sucesso: {NumIF}")
+        logger.debug(f"NIF extraído com sucesso: {NumIF}")
     else:
         NumIF = ""
     if mail.Body.find('Notas:')>-1:
@@ -158,20 +158,20 @@ def EmailWithRegra(mail,logger):
     for line in mail.Body.splitlines():
         if line.find('Tipo Assunto:')>-1 or line.find('Assunto:')>-1:
             Subject = line.split(':')[1]
-            logger.info(f'Assunto extraído com sucesso: {Subject}')
+            logger.debug(f'Assunto extraído com sucesso: {Subject}')
         if line.find('Nome:')>-1:
             if not '@' in line.split(':')[1]:
                 Nome = line.split(':')[1].lower().title().strip()
                 Nome = Nome.replace("'",' ')
-                logger.info(f"Nome extraído com sucesso: {Nome}")
+                logger.debug(f"Nome extraído com sucesso: {Nome}")
             else:
                 Nome = ''
         if line.find('Email:')>-1:
             Email = line.split(':')[1].lower()
-            logger.info(f'Email extraído com sucesso: {Email}')
+            logger.debug(f'Email extraído com sucesso: {Email}')
         if line.find('Mensagem:')>-1 :
             Body = line.split(':')[1]
-            logger.info(f'Body extraído com sucesso: {Body}')
+            logger.debug(f'Body extraído com sucesso: {Body}')
 
     return Body, NumIF, Nome, Subject, Email
 

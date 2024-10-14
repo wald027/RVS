@@ -91,7 +91,7 @@ def cleaner(validar):
 # Extrair as apólices do email
 def get_apolice(text, emailID, logger) -> str:
     # Logger para a Base de Dados
-    logger.info(f"A tratar apólice {emailID}")   
+    logger.debug(f"A tratar apólice {emailID}")   
     # se o texto for string 
     if isinstance(text, str):
         # retira os espaços e as quebras de linhas
@@ -138,7 +138,7 @@ def get_apolice(text, emailID, logger) -> str:
             # retorna uma string com os valores separados por "|"
             return "|".join(set(apolice_valida)) 
     #logger           
-    logger.info(f"Fim do tratamento da apólice {emailID}")
+    logger.debug(f"Fim do tratamento da apólice {emailID}")
     return " "
 
 
@@ -240,7 +240,7 @@ def find_numbers(text):
 # Extrair os NIFs
 def get_nif(text, logger):  
     # logger
-    logger.info("A Tentar Identificar um NIF Presente no Email")
+    logger.debug("A Tentar Identificar um NIF Presente no Email")
     nif_values = []
     numbers = find_numbers(text)
     
@@ -251,11 +251,11 @@ def get_nif(text, logger):
             # se o elemento tiver comprimento 9
             if len(str(j)) == 9: 
                 # validar o nif
-                logger.info("A Validar o possível NIF...")        
+                logger.debug("A Validar o possível NIF...")        
                 value = validar_nif(j)                              
                 # não for vazia
                 if value:
-                    logger.info("NIF Validado com Sucesso!")    
+                    logger.debug("NIF Validado com Sucesso!")    
                     # criar uma lista de valores              
                     nif_values.append(str(j))
         # não for vazia
@@ -267,23 +267,23 @@ def get_nif(text, logger):
                     # remover valores
                     nif_values.remove(i)  
             # logger
-            logger.info("Fim do tratamento do NIF")   
+            logger.debug("Fim do tratamento do NIF")   
             # retornar uma string de valores   
             return '|'.join(set(nif_values))
         else: 
             # logger
-            logger.info("Fim do tratamento do NIF")
+            logger.debug("Fim do tratamento do NIF")
             return " "
     else:
         # logger
-        logger.info("Fim do tratamento do NIF")
+        logger.debug("Fim do tratamento do NIF")
         return " "
 
 
 # Extrair os Nomes
 def get_names(text, logger):
     # logger
-    logger.info(f"A Analisar os Nomes presentes no email")
+    logger.debug(f"A Analisar os Nomes presentes no email")
     # valores presentes nos emails que devem ser excluidos
     noise = ["pt50", "diretor", "subdiretor", "professor", "Suplementar"]  # ["agradecia", "obrigada", "pt", "rua", "lisboa", "nif", "cumprimentos"]
     names = []
@@ -306,13 +306,13 @@ def get_names(text, logger):
             names_concat = " ".join(names_partial).strip()
             if len(names_concat) > 0 and names_concat not in names:
                 names.append(names_concat)
-    logger.info("Fim da análise dos Nomes")
+    logger.debug("Fim da análise dos Nomes")
     return "|".join(list(set(names)))
 
 def get_historico_new(text, emailID, logger):
     i = text #fix temporaria
     print(text)
-    logger.info(f"A Analisar o Histórico do EmailID: {emailID}")
+    logger.debug(f"A Analisar o Histórico do EmailID: {emailID}")
     if  "De:" in i and "Enviado:" in i and "Para:" in i and "Assunto:" in i :
         return True
     elif  "De:" in i and "Enviado:" in i and "Para:" in i and "Cc:" in i and "Assunto:" in i:
@@ -364,7 +364,7 @@ def get_historico_new(text, emailID, logger):
 
 def get_historico(text, emailID, logger):
     #logger
-    logger.info(f"A Analisar o Histórico do EmailID: {emailID}")
+    logger.debug(f"A Analisar o Histórico do EmailID: {emailID}")
     # loop pelo texto
     i = text
     # se contiver algum dos termos abaixo
@@ -383,7 +383,7 @@ def get_historico(text, emailID, logger):
         "From:" in i and "Sent:" in i and "To:" in i and "Subject:" in i or
         "From:" in i and "Data:" in i and "Assunto:" in i and "Para:" in i):
         #logger
-        logger.info("Email com Histórico!")
+        logger.debug("Email com Histórico!")
         #retorna "Tem histórico"
         return "TRUE"
     # se contiver algum dos termos abaixo
@@ -395,10 +395,10 @@ def get_historico(text, emailID, logger):
             "---------- Forwarded message ---------" in i or
             "-------- Mensagem original --------" in i):
         #logger
-        logger.info(f"Email com Histórico!")
+        logger.debug(f"Email com Histórico!")
         return "TRUE" 
     #logger
-    logger.info(f"Email sem Histórico")           
+    logger.debug(f"Email sem Histórico")           
     return 'FALSE'
 
 

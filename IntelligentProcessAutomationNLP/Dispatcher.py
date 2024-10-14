@@ -50,13 +50,13 @@ def main():
     dfDict = pd.read_excel(intencoes_filepath,sheet_name='LabelMap')
     label_map = dict(zip(dfDict['Key'].astype(str), dfDict['Value'].astype(str)))
 
-    customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
+    logger = customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
     try:
-        logger = logging.getLogger(__name__)
+        #logger = logging.getLogger(__name__)
         if Debug:
             logger.warning('O DISPATCHER ESTÁ A EXECUTAR EM MODO TESTE')
             logger.warning('OS DADOS VÃO SER ADICIONADOS ÀS TABELAS DE TESTE')
-        logger.info("A Iniciar o Dispatcher do Processo RVS IPA NLP....")
+        logger.info(f"A Iniciar o Dispatcher do Processo {nomeprocesso}....")
         time.sleep(1)
         logger.info("Config Lida Com Sucesso!")
         #for app in readConfig.queryByNameDict('AplicacoesDisp',dictConfig).split(','):

@@ -60,19 +60,22 @@ def loginGIO(driver:webdriver.Chrome,dictConfig):
 
 #Navega para a página de pesquisa (tambem não utilizado ainda)
 def navegarGIO(driver:webdriver.Chrome):
+    MFA = False
     try:
         login = driver.find_element(By.XPATH, "//div[@role='heading' and @aria-level='1' and text()='Sign in']") 
         if login:
             raise Exception('Necessário autenticação com MFA.')
     except NoSuchElementException as e:
         print(driver.title)
+        try:
+            search = driver.find_element(By.XPATH,'/html/body/div[2]/nav/div/ul/li[3]/a')
+        except:
+            search = driver.find_element(By.CLASS_NAME, "fa-user")
+        search.click()
     except Exception as e:
-        raise Exception(e)
-    try:
-        search = driver.find_element(By.XPATH,'/html/body/div[2]/nav/div/ul/li[3]/a')
-    except:
-        search = driver.find_element(By.CLASS_NAME, "fa-user")
-    search.click()
+        MFA = True
+    return MFA
+    
  
 #Faz a pesquisa pelo driver que lhe enviarmos (driver as in Nome, Apolice, NIF e Email))
 def pesquisarGIO(driver:webdriver.Chrome,search,pesquisa:str,logger:logging.Logger):
@@ -118,6 +121,7 @@ def ScrapTableGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFrame
     table_data = []
     #Extair Info 
     #Se não houver registos a extrair, ou seja, 0 registos apresentados irá retornar uma dataframe vazia
+    logger.info("A tentar extrair dados apresentados...")
     if max(list(map(int, NumRegistos))) > 0:
         while True:
             #'tr' equivale a uma row
@@ -127,7 +131,7 @@ def ScrapTableGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFrame
                 cols = row.find_elements(By.TAG_NAME, 'td')
                 col_data = [col.text for col in cols]
                 table_data.append(col_data)
-                logger.info(f'A Extrair row com os dados: {col_data}')
+                logger.debug(f'A Extrair row com os dados: {col_data}')
             #enquanto não extrair TUDO vai carregar no botão de next
             if not len(table_data) >= max(list(map(int, NumRegistos))):
                 driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[1]/div/div/div[2]/div/div[3]/div[2]/div/ul/li[3]').click()
@@ -184,7 +188,7 @@ def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFra
             for row in rows:
                 cols = row.find_elements(By.TAG_NAME, 'td')
                 col_data = [col.text for col in cols]
-                logger.info(f'A Extrair row com os dados: {col_data}')
+                logger.debug(f'A Extrair row com os dados: {col_data}')
                 table_data.append(col_data)
             if not len(table_data) == max(list(map(int, NumRegistos))):
                 driver.find_element(By.XPATH,'/html/body/div[2]/div/div[2]/div[2]/div/div[2]/div/div/div[3]/div/div/div/div[3]/div[2]/div/ul/li[5]/a').click()
@@ -192,8 +196,9 @@ def ScrapApoliceGIO(driver:webdriver.Chrome,logger:logging.Logger) -> pd.DataFra
             else:
                 break
         df=pd.DataFrame(table_data,columns=headers)
+        logger.info("Apolices extraídas com Sucesso!")
     else:
-        logger.info('Sem Dados para Extrair!')
+        logger.info('Sem Apolices para Extrair!')
         df = pd.DataFrame
     #Converter para dataframe
     #print(df)
@@ -607,7 +612,7 @@ def idAlertas(driver:webdriver.Chrome,dfInfoRegisto:pd.DataFrame,dictConfig,logg
     email = ''
     for body in rowEmails['Template']:
         email = body
-        print(body)
+        logger.debug(body)
         break 
     #print(rowAnalise)
     #print(rowAnalise.drop(columns='ID').map(lambda x :x == 'NA').all(axis=1).empty)
