@@ -3,7 +3,7 @@ from customScripts.readConfig import *
 import customScripts.databaseSQLExpress as databaseSQLExpress
 from Automation.BusinessRuleExceptions import BusinessRuleException
 from customScripts.customLogging import setup_logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from Automation.MailboxRVS import SendEmail as SendOutlookMail
 import subprocess
 
@@ -70,6 +70,23 @@ def main():
                         dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
                         databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
                         raise BusinessRuleException(e)
+                #Processar dados da Mailbox (Tratamento Manual)
+                try:
+                    logger.info("A Verificar os Dados Extraídos da Mailbox....")
+                    IDbd = dfQueueItem.loc[0,'IDIntencao']
+                    dataEmail = datetime.strptime(dfQueueItem.loc[0,'DataEmail'][:-1], '%Y-%m-%d %H:%M:%S.%f')
+                    if dfQueueItem.loc[0,'Status'] == 'Tratamento Manual':
+                        raise BusinessRuleException(f'{dfQueueItem.loc[0,"DetalheMensagem"]}')
+                    if not dataEmail+ timedelta(hours=queryByNameDict('SLA_Performer',dictConfig)) > datetime.today():
+                        raise BusinessRuleException(f"SLA fora do limite")
+                    logger.info("Dados Validados com Sucesso!")
+                except BusinessRuleException as e:
+                    dfQueueItem.loc[0,"DetalheMensagem"] = str(e).split(':')[1].strip().casefold().capitalize()
+                    dfQueueItem.loc[0,"Estado"] = 'Definição do Negócio'
+                    dfQueueItem.loc[0,"Mensagem"] = 'Impossibilidade da Mailbox'
+                    dfReportOutput.loc[len(dfReportOutput)] = prepararOutput(dfQueueItem,'Via RNA',IDbd)
+                    databaseSQLExpress.UpdateQueueItem(db,dfQueueItem,dfQueueItem.loc[0,"Mensagem"],queueItem,tabelaPedidos,"Failed",'Definição do Negócio',str(e).split(':')[1].strip())
+                    raise BusinessRuleException(e)
                 #Atividade NLP (Verificar Dados providenciados pelo mesmo)
                 try:
                     logger.info('A Verificar Dados Vindos do NLP....')

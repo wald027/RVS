@@ -40,7 +40,7 @@ def GetQueueItem(conn:pyodbc.Connection,column_names,QueueTable,InfoTable):
             SELECT TOP(1) {', '.join(column_names)}
             FROM {InfoTable} et
             JOIN {QueueTable} st ON et.EmailID = st.Reference
-            WHERE st.Status = 'NLP FINISHED' OR st.Status = 'NLP FAILED';
+            WHERE st.Status = 'NLP FINISHED' OR st.Status = 'NLP FAILED' OR st.Status = 'Tratamento Manual';
         """
     cursor.execute(query)
     results = [list(row) for row in cursor.fetchall()]

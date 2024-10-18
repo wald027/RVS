@@ -5,6 +5,7 @@ from customScripts.databaseSQLExpress import *
 import pandas as pd
 from pywinauto import Application
 import time
+from Automation.BusinessRuleExceptions import BusinessRuleException
 #eventualmente retirar isto e usar a db connection vinda do dispacther
 #server = 'PT-L162219\SQLEXPRESS'
 #database = 'RealVidaSeguros'
@@ -51,6 +52,7 @@ def EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmail):
                             boolDiscard = True
                             return boolDiscard
     logger.info(f"Sem Match com nenhuma Regra!")
+
 
 def EmailRegraPreTratamento(mail,logger,dfRegrasEmail):
     #dfRegrasEmail = pd.read_excel(r"C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx",sheet_name='RegrasEmailsPreTratamento',keep_default_na=False)
@@ -187,23 +189,23 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
     current_Mailbox = InitEmailConn(logger,mailbox_name) #Aceder Diretório Raiz do Email
     current_folder = find_folder(current_Mailbox, inbox_name) #Procurar a inbox do Email
     folder_toMove=find_folder(current_Mailbox,folder_toreview)#Procurar Pasta para onde os emails vão apos lidos
-    dfRegrasEmailDiscard = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasEmailDiscard',dictConfig),keep_default_na=False)
-    dfRegrasEmailPreTratamento = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasPreTratamento',dictConfig),keep_default_na=False)
+    try:
+        logger.info(f"A tentar ler o ficheiro auxiliar {queryByNameDict('PathConfigRegrasEmails',dictConfig)}...")
+        dfRegrasEmailDiscard = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasEmailDiscard',dictConfig),keep_default_na=False)
+        dfRegrasEmailPreTratamento = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasPreTratamento',dictConfig),keep_default_na=False)
+        logger.info("Ficheiro lido com Sucesso!")
+    except Exception as e:
+        logger.warning(f"Impossibilidade em ler o ficheiro {queryByNameDict('PathConfigRegrasEmails',dictConfig)}")
+        raise e
     if current_folder:
         logger.info(f"Pasta Encontada: {current_folder.Name}")
-        # Aceder aos emails
         messages = current_folder.Items
-
-        #Sample de Filtros
-        #received_dt = datetime.now() - timedelta(days=1)
-        #received_dt = received_dt.strftime('%m/%d/%Y %H:%M %p')
-        #messages = messages.Restrict("[ReceivedTime] >= '" + received_dt + "'")
-        #messages = messages.Restrict("[SenderEmailAddress] = 'brun0l0b0@outlook.com'")
-        #messages = messages.Restrict("[Subject] = 'Sample Report'")
         numEmails = messages.count 
         logger.info(f'Existem {messages.count} emails na pasta {current_folder.Name}') #nome da pasta
         #https://learn.microsoft.com/en-us/dotnet/api/microsoft.office.interop.outlook.mailitem?view=outlook-pia conteudo email
+        messages.Sort("[ReceivedTime]", False) #ordenar emails por mais antigo até mais recente
         for mail in list(messages):
+            dataEmail=datetime.datetime(mail.SentOn.year,mail.SentOn.month,mail.SentOn.day,mail.SentOn.hour,mail.SentOn.minute,mail.SentOn.second)
             Attachments='False'
             html_body=mail.HTMLBody
             for attachment in mail.attachments:
@@ -214,25 +216,41 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
             property_accessor = mail.PropertyAccessor
             message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
             boolDiscard = False
-            for emailAddrDiscard in queryByNameDict('SenderEmailDiscard',dictConfig).split('|'):
-                if emailAddrDiscard == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
-                    boolDiscard = EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmailDiscard)
-                    if boolDiscard:
-                        numEmails = numEmails - 1
-                        break
+            logger.info(f"A processar o email de {mail.SenderEmailAddress} recebido a {dataEmail}....")
+            #Verificação da data de recebimento face ao SLA
+            print(dataEmail+ datetime.timedelta(hours=48) > datetime.datetime.today()) 
+            #
+            if dataEmail+ datetime.timedelta(hours=queryByNameDict('SLA',dictConfig)) > datetime.datetime.today():
+                logger.info("SLA dentro do limite!")
+                for emailAddrDiscard in queryByNameDict('SenderEmailDiscard',dictConfig).split('|'):
+                    if emailAddrDiscard == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
+                        boolDiscard = EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmailDiscard)
+                        if boolDiscard:
+                            numEmails = numEmails - 1
+                            break
+            else:
+                logger.warning("SLA fora do limite!")
+                if mail.Unread:
+                    mail.Unread=False
+                    mail.save()
+                mail.move(find_folder(current_Mailbox,queryByNameDict("EmailTratamentoManualMove",dictConfig)))
+                logger.info(f'Email movido para {queryByNameDict("EmailTratamentoManualMove",dictConfig)}')
+                time.sleep(3)
+                numEmails=numEmails-1
+                boolDiscard=True
             if not boolDiscard:           
                 for emailAddr in queryByNameDict("SenderEmailExtract",dictConfig).split('|'):
                     if emailAddr == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
                         Body, NumIF, Nome, Subject, Email =EmailRegraPreTratamento(mail,logger,dfRegrasEmailPreTratamento)
                         #Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
                         columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
-                        data = [(Email,mail.SentOn,message_id,Subject,Body,Attachments,NumIF,Nome)]    
+                        data = [(Email,dataEmail,message_id,Subject,Body,Attachments,NumIF,Nome)]    
                         #mail.Subject =Subject
                         break
                     else:
-                        data = [(mail.SenderEmailAddress,mail.SentOn,message_id,mail.Subject,mail.Body,Attachments)]
+                        data = [(mail.SenderEmailAddress,dataEmail,message_id,mail.Subject,mail.Body,Attachments)]
                         columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
-                logger.info(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {mail.senton} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
+                logger.debug(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {dataEmail} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
                 try:
                     InsertDataBD(conn,tablename,columns,data)
                     logger.info("Email Enviado com Sucesso para a Base de Dados!")
@@ -245,14 +263,107 @@ def GetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename)
                     mail.move(folder_toMove)
                     logger.info(f"Email Movido para a Pasta {folder_toMove}")
                     time.sleep(3)
-                except Exception as e:
+                except Exception as e:        
                     logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
                     numEmails = numEmails -1
+            elif boolDiscard:
+                data = [(mail.SenderEmailAddress,dataEmail,message_id,mail.Subject,mail.Body,Attachments)]
+                columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
+                InsertDataBD(conn,tablename,columns,data)
+                columns =['Status','Reference','SpecificContent','Process']
+                data = [('TRATAMENTO MANUAL',message_id,''.join(map(str, data)),nomeprocesso)]
+                InsertDataBD(conn,queuetablename,columns,data)
+                logger.info("Email Enviado com Sucesso para a Base de Dados!")
         return numEmails
     else:
         logger.warn(f"Pasta: {inbox_name} não encontrada!")
     #if conn:
     #    conn.close
+
+def NewGetEmailsInbox(logger,conn,dictConfig,nomeprocesso,tablename,queuetablename):
+    mailbox_name =  queryByNameDict("MailboxName",dictConfig)
+    inbox_name= queryByNameDict("InboxFolder",dictConfig)
+    folder_toreview = queryByNameDict("EmailsToMove",dictConfig)
+    current_Mailbox = InitEmailConn(logger,mailbox_name) #Aceder Diretório Raiz do Email
+    current_folder = find_folder(current_Mailbox, inbox_name) #Procurar a inbox do Email
+    folder_toMove=find_folder(current_Mailbox,folder_toreview)#Procurar Pasta para onde os emails vão apos lidos
+    #Tentar ler ficheiros auxiliares
+    try:
+        logger.info(f"A tentar ler o ficheiro auxiliar {queryByNameDict('PathConfigRegrasEmails',dictConfig)}...")
+        dfRegrasEmailDiscard = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasEmailDiscard',dictConfig),keep_default_na=False)
+        dfRegrasEmailPreTratamento = pd.read_excel(queryByNameDict('PathConfigRegrasEmails',dictConfig),sheet_name=queryByNameDict('SheetRegrasPreTratamento',dictConfig),keep_default_na=False)
+        logger.info("Ficheiro lido com Sucesso!")
+    except Exception as e:
+        logger.warning(f"Impossibilidade em ler o ficheiro {queryByNameDict('PathConfigRegrasEmails',dictConfig)}")
+        raise e
+    
+    if current_folder:
+        logger.info(f"Pasta Encontada: {current_folder.Name}")
+        messages = current_folder.Items
+        numEmails = messages.count 
+        logger.info(f'Existem {messages.count} emails na pasta {current_folder.Name}') #nome da pasta
+        messages.Sort("[ReceivedTime]", False) #ordenar emails por mais antigo até mais recente
+        for mail in list(messages):
+            #A cada email
+            dataEmail=datetime.datetime(mail.SentOn.year,mail.SentOn.month,mail.SentOn.day,mail.SentOn.hour,mail.SentOn.minute,mail.SentOn.second)
+            Attachments='False'
+            html_body=mail.HTMLBody
+            property_accessor = mail.PropertyAccessor
+            message_id = property_accessor.GetProperty("http://schemas.microsoft.com/mapi/proptag/0x1035001F")
+
+            for attachment in mail.attachments:
+                print(attachment.Filename)
+                if attachment.Filename not in html_body:
+                    Attachments='True'
+                    break
+
+            logger.info(f"A processar o email de {mail.SenderEmailAddress} recebido a {dataEmail}....")
+            #Verificação da data de recebimento face ao SLA
+            try:
+                boolDiscard = False
+                if not dataEmail+ datetime.timedelta(hours=queryByNameDict('SLA_Dispatcher',dictConfig)) > datetime.datetime.today():
+                    raise BusinessRuleException("SLA fora do limite")
+                for emailAddrDiscard in queryByNameDict('SenderEmailDiscard',dictConfig).split('|'):
+                    if emailAddrDiscard == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
+                        boolDiscard = EmailRegraDiscard(mail,logger,current_Mailbox,dfRegrasEmailDiscard)
+                        if boolDiscard:
+                            raise BusinessRuleException("Email fora de âmbito")        
+                for emailAddr in queryByNameDict("SenderEmailExtract",dictConfig).split('|'):
+                    if emailAddr == (mail.SenderName + f' <{mail.SenderEmailAddress}>'):
+                        Body, NumIF, Nome, Subject, Email =EmailRegraPreTratamento(mail,logger,dfRegrasEmailPreTratamento)
+                        #Body, NumIF, Nome, Subject, Email = EmailWithRegra(mail,logger)
+                        columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','NIF','Nome']
+                        data = [(Email,dataEmail,message_id,Subject,Body,Attachments,NumIF,Nome)]    
+                        #mail.Subject =Subject
+                        break
+                    else:
+                        data = [(mail.SenderEmailAddress,dataEmail,message_id,mail.Subject,mail.Body,Attachments)]
+                        columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos']
+                dataQueue = [('NLP',message_id,''.join(map(str, data)),nomeprocesso)]
+            except BusinessRuleException as e:
+                logger.warning(str(e))
+                numEmails = numEmails - 1
+                data = [(mail.SenderEmailAddress,dataEmail,message_id,mail.Subject,mail.Body,Attachments,str(e).split(":")[1])]
+                columns =['EmailRemetente','DataEmail','EmailID','Subject','Body','Anexos','DetalheMensagem']
+                dataQueue = [('Tratamento Manual',message_id,''.join(map(str, data)),nomeprocesso)]
+            logger.debug(f"Sender: {mail.SenderEmailAddress} Subject:{mail.Subject} Recebido: {dataEmail} Message-ID: {message_id} Attachments:{Attachments}")#Enviar BD e Logs
+            try:
+                InsertDataBD(conn,tablename,columns,data)
+                logger.info("Email Enviado com Sucesso para a Base de Dados!")
+                columnsQueue =['Status','Reference','SpecificContent','Process']
+                InsertDataBD(conn,queuetablename,columnsQueue,dataQueue)
+                if mail.Unread:
+                    mail.Unread=False
+                    mail.save()
+                mail.move(folder_toMove)
+                logger.info(f"Email Movido para a Pasta {folder_toMove}")
+                time.sleep(3)
+            except Exception as e:        
+                logger.error(f"Erro ao tentar inserir Info na Base de Dados: {e}")
+                numEmails = numEmails -1
+        return numEmails
+    else:
+        logger.warn(f"Pasta: {inbox_name} não encontrada!")
 
 def SearchMailInbox(logger,pastapesquisar,mailbox,emailID):
     root_folder = InitEmailConn(logger,mailbox)

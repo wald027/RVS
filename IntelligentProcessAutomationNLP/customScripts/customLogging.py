@@ -54,13 +54,13 @@ def setup_logging(db,table,nomeprocesso):
     logger.addHandler(console_handler)
     
     #Handler de INFO level logs
-    file_handler_info = logging.FileHandler(f'Logs\Info_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt')
+    file_handler_info = logging.FileHandler(f'Logs\Info_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt', encoding='utf-8')
     file_handler_info.setLevel(logging.INFO)
     file_handler_info.setFormatter(formatter)
     logger.addHandler(file_handler_info)
 
     #Handler de Debug level logs
-    file_handler_debug = logging.FileHandler(f'Logs\Debug_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt')
+    file_handler_debug = logging.FileHandler(f'Logs\Debug_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt',encoding='utf-8')
     file_handler_debug.setLevel(logging.DEBUG)
     file_handler_debug.setFormatter(formatter)
     logger.addHandler(file_handler_debug)

@@ -62,7 +62,7 @@ def main():
         #for app in readConfig.queryByNameDict('AplicacoesDisp',dictConfig).split(','):
         #    KillAllApplication(app+'.exe',logger)
         #InitApplications(readConfig.queryByNameDict('outlookPath',dictConfig),logger)
-        mailcount = MailboxRVS.GetEmailsInbox(logger,db,dictConfig,nomeprocesso,EMAIL_TABLE,STATUS_TABLE)
+        mailcount = MailboxRVS.NewGetEmailsInbox(logger,db,dictConfig,nomeprocesso,EMAIL_TABLE,STATUS_TABLE)
         if mailcount > 0:
             logger.info("Emails Extraídos com Sucesso!")
             ENGINE = create_engine(f"mssql+pyodbc://@{server}/{database}?driver={driver}&Trusted_Connection=yes")
@@ -73,7 +73,7 @@ def main():
         time.sleep(5)
         logger.info("Dispatcher Terminado")
     except Exception as e:
-        logger.error(f"Erro Dispatcher {e}")
+        logger.error(f"Erro no Dispatcher {e}")
     db.close()
 
 
