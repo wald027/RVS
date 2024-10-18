@@ -21,15 +21,50 @@ class CustomHandler(logging.StreamHandler):
         if record:
             databaseSQLExpress.InsertDataBD(self.db,self.table,columns,data)
 
+#class provavelmente pode ser retirada
+class CustomFilter(logging.Filter):
+    def filter(self, record):
+        if not hasattr(record, 'user'):
+            record.user = os.getlogin()  # Hardcoded user
+        if not hasattr(record, 'robot'):
+            record.robot = f'{os.environ["COMPUTERNAME"]}_{os.getlogin()}'  # Hardcoded robot
+        return True
+    
+class CustomFormatter(logging.Formatter):
+    def format(self, record):
+        if not hasattr(record, 'user'):
+            record.user = os.getlogin()  # Hardcoded user
+        if not hasattr(record, 'robot'):
+            record.robot = f'{os.environ["COMPUTERNAME"]}_{os.getlogin()}'  # Hardcoded robot
+        return super().format(record)
+    
 def setup_logging(db,table,nomeprocesso):
-    logger = logging.Logger('RealVidaSeguros')
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
+    #Handler Base de Dados
+    #logger = logging.Logger('RealVidaSeguros')
+    logger = logging.getLogger('RealVidaSeguros')
+    logger.setLevel(logging.DEBUG)
     Customhandler = CustomHandler(db,table,nomeprocesso)
     logger.addHandler(Customhandler)
+    
     #Handler para os logs aparecerem na consola (talvez desativar em producao)
-    formatter = logging.Formatter('%(asctime)s | %(filename)s | %(funcName)s | %(levelname)s | %(message)s')
+    formatter = CustomFormatter('%(asctime)s | %(levelname)s | %(robot)s | %(filename)s | %(funcName)s - %(message)s')
     console_handler = logging.StreamHandler()
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG)
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
+    
+    #Handler de INFO level logs
+    file_handler_info = logging.FileHandler(f'Logs\Info_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt', encoding='utf-8')
+    file_handler_info.setLevel(logging.INFO)
+    file_handler_info.setFormatter(formatter)
+    logger.addHandler(file_handler_info)
+
+    #Handler de Debug level logs
+    file_handler_debug = logging.FileHandler(f'Logs\Debug_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt',encoding='utf-8')
+    file_handler_debug.setLevel(logging.DEBUG)
+    file_handler_debug.setFormatter(formatter)
+    logger.addHandler(file_handler_debug)
+
+    logger.addFilter(CustomFilter())
+
+    return logger

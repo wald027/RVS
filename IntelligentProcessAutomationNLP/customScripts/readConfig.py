@@ -3,8 +3,8 @@ import os.path
 import pandas as pd 
 
 
-def readConfig():
-    configPath = r'C:\Users\brunofilipe.lobo\OneDrive - CGI\Code\realvidaseguros\Config.xlsx'
+def readConfig(path):
+    configPath = path
     if os.path.isfile(configPath):
         dictConfig:pd.DataFrame
         dictConfig =pd.read_excel(configPath,keep_default_na=False,sheet_name='Sheet1') 

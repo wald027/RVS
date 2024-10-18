@@ -4,11 +4,11 @@ import pandas as pd
 import time
 from transformers import BertTokenizer, BertForSequenceClassification, pipeline
 from ModelNLP import helpers
-
+from datetime import datetime
 
 
 class EmailClassifier:
-    def __init__(self, base_dir: str, num_labels: int, status_table: str, email_table: str, column_names: list[str], engine, logger,db) -> None:
+    def __init__(self, base_dir: str, num_labels: int, status_table: str, email_table: str, column_names: list[str], engine,label_map, logger,db,Debug) -> None:
         # Inicializa a classe com os parâmetros necessários
         self.base_dir = base_dir # Diretório base onde estão armazenados o modelo e o tokenizador
         self.num_labels = num_labels # Número de rótulos de classificação
@@ -18,6 +18,8 @@ class EmailClassifier:
         self.engine = engine # Conexão com o banco de dados
         self.cursor = db.cursor() # Cursor para executar comandos SQL
         self.logger = logger # Logger para registrar informações e erros
+        self.label_map = label_map #Label Map
+        self.Debug=Debug
 
     def get_emails(self) -> pd.DataFrame:
         # Carrega dados do banco de dados
@@ -37,7 +39,7 @@ class EmailClassifier:
         for i in df["EmailID"].tolist():   
             query = f"""
                 UPDATE {self.status_table}
-                SET Status = 'NLP IN PROGRESS'
+                SET Status = 'NLP IN PROGRESS', [Started NLP] = GETDATE()
                 WHERE Reference = '{i}';
             """  # text() is needed when using sqlalchemy
             self.cursor.execute(query) # Executa a atualização para cada EmailID
@@ -46,8 +48,8 @@ class EmailClassifier:
     
     def get_predictions(self, df: pd.DataFrame) -> pd.DataFrame:
         # Carrega o tokenizador e o modelo BERT
-        model = BertForSequenceClassification.from_pretrained(self.base_dir.strip('/')+'/IntelligentProcessAutomationNLP/ModelNLP/model', num_labels=self.num_labels)
-        tokenizer = BertTokenizer.from_pretrained(self.base_dir.strip('/')+'/IntelligentProcessAutomationNLP/ModelNLP/tokenizer', truncation=True, padding="max_length", max_length=128)
+        model = BertForSequenceClassification.from_pretrained(self.base_dir.strip('/')+'/model', num_labels=self.num_labels)
+        tokenizer = BertTokenizer.from_pretrained(self.base_dir.strip('/')+'/tokenizer', truncation=True, padding="max_length", max_length=128)
         self.logger.info("LOADED - model and tokenizer.") # Informa que o modelo e o tokenizador foram carregados
 
         # Obter predições
@@ -84,8 +86,9 @@ class EmailClassifier:
                 else:
                     row['NIF'] = results[0][1]
             # Prepara a query para atualizar o banco de dados com as novas informações
+            row['Nome'] = row['Nome'].replace("'","")#Fix importante para nomes com ''
             data = ', '.join([f"{col} = '{row[col]}'" for col in
-                              ['NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes']])
+                              ['NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes','NomeIntencao','EmailCurto']])
                                    
             query = f"""
                 UPDATE {self.email_table}
@@ -103,7 +106,7 @@ class EmailClassifier:
         for i in df['EmailID'].tolist():
             query = f"""
                 UPDATE {self.status_table}
-                SET Status = 'NLP FINISHED'
+                SET Status = 'NLP FINISHED', [Ended NLP] = GETDATE()
                 WHERE Reference = '{i}';
             """
             self.cursor.execute(query)
@@ -121,7 +124,7 @@ class EmailClassifier:
     def run(self):
         # Executa o processo de classificação de emails
         df = self.get_emails() # Obtém os dados dos emails
-        print(df)
+        #print(df)
         # Limpa o corpo do email, removendo sentenças não-portuguesas, caracteres não-imprimíveis e espaços extras
         df["Text"] = df["Body"].copy()
         
@@ -154,101 +157,17 @@ class EmailClassifier:
         except Exception as e:
             self.logger.error(f"Erro NLP ID Termos Expressões: {e}")
             raise e
+        try:
+            df["Concatenated"] = df["Subject"] + " " + df["Body"]
+            df["EmailCurto"] = df["Concatenated"].apply(lambda x: isinstance(x, str) and len(x.split()) <= 5)
+        except Exception as e:
+            self.logger.error(f'Erro NLP a Determinar Tamanho de Email {e}')
+        try:
+            df['NomeIntencao'] = df["IDIntencao"].map(self.label_map)
+        except Exception as e:
+            self.logger.error(f'Erro NLP a Determinar Nome da Intenção {e}')
         self.logger.info("FEATURES - generated.") # Informa que as características foram geradas
-        df.to_excel('output_integration.xlsx') # Salva os resultados em um arquivo Excel
+        if self.Debug:
+            file_path = f'ExecTeste\Output_NLP_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
+            df.drop(columns=['Concatenated','Text','DetalheMensagem','Mensagem','Estado','Anexos']).to_excel(file_path) # Salva os resultados em um arquivo Excel -- Modo Teste 
         self.update_database(df) # Atualiza o banco de dados com as novas informações
-
-
-'''
-## CONFIG variables
-NUM_LABELS = 11
-BASE_DIR = "/Users/feliperocha/Documents/CGI/Email Answering/"
-TOKENIZER_PATH = BASE_DIR + "tokenizer"
-MODEL_PATH = BASE_DIR + "model"
-DATABASE = "RealVidaSeguros"
-STATUS_TABLE = "QueueItem"
-EMAIL_TABLE = "Emails_IPA_NLP"
-
-COLUMN_NAMES = [
-    'EmailRemetente','DataEmail', 'EmailID','Subject', 'Body', 'Anexos',
-    'NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes',
-    'DetalheMensagem', 'Mensagem', 'Estado'
-]
-ENGINE = db.create_engine(f'mysql+mysqlconnector://root:@localhost:3306/{DATABASE}')
-CONN = ENGINE.connect()
-
-# Load data from database
-query = f"""
-    SELECT {', '.join(COLUMN_NAMES)}
-    FROM {EMAIL_TABLE} et
-    JOIN {STATUS_TABLE} st ON et.EmailID = st.Reference
-    WHERE st.Status = "NLP";
-"""
-df = pd.read_sql_query(query, con=ENGINE)
-
-# Update Status
-query = text(f"""
-    UPDATE {STATUS_TABLE}
-    SET Status = 'NLP IN PROGRESS'
-    WHERE Reference IN {tuple(df['EmailID'].to_list())};
-""")  # text() is needed when using sqlalchemy
-CONN.execute(query)
-
-# Clean e-mail body (remove non-portuguese sentences, non-printable character and extra spaces)
-df["Text"] = df["Body"].copy()
-
-# Identify e-mails replied / e-mail chain
-df["HistoricoEmails"] = df["Body"].apply(lambda x: ((x.count("From:") > 1) and (x.count("To:") > 1)) | ((x.count("De:") > 1) and (x.count("Para:") > 1)))
-
-# Identify empty texts (this may happen if the e-mail is not i english or if it's too short)
-df["Text"] = df.apply(lambda x: x["Text"] if len(x["Text"].split()) >= 5 else helpers.clean(x["Subject"]) + " " + x["Text"], axis=1)
-
-# Load the BERT tokenizer and model
-model = BertForSequenceClassification.from_pretrained(MODEL_PATH, num_labels=NUM_LABELS)
-tokenizer = BertTokenizer.from_pretrained(TOKENIZER_PATH, truncation=True, padding="max_length", max_length=128)
-
-# Get predictions
-clf = pipeline("text-classification", model=model, tokenizer=tokenizer, truncation=True, padding="max_length", max_length=128)
-predictions = clf(df["Text"].to_list())
-labels = [str(int(pred["label"].split('_')[1])) for pred in predictions]
-scores = [str(round(float(pred["score"]), 2)) for pred in predictions]
-
-df["IDIntencao"] = labels
-df["Score"] = scores
-
-# Aditional Features
-df["Apolice"] = df.apply(lambda x: helpers.get_apolice(x["Subject"].strip(".") + ". " + x["Body"]), axis=1)
-df["Nome"] = df.apply(lambda x: helpers.get_names((x["Subject"].strip(".") + ". " + x["Body"])), axis=1)
-df["NIF"] = df.apply(lambda x: helpers.get_nif(x["Subject"].strip(".") + ". " + x["Body"]), axis=1)
-df["IDTermosExpressoes"] = df["Body"].apply(helpers.get_top_three_keywords_counts)
-
-# Save to database
-df = df[COLUMN_NAMES]
-
-def update_row(row):
-    data = ', '.join([f"{col} = '{row[col]}'" for col in ['NIF', 'Apolice', 'Nome', 'HistoricoEmails', 'IDIntencao', 'Score', 'IDTermosExpressoes']])
-    query = text(f"""
-        UPDATE {EMAIL_TABLE}
-        SET {data}
-        WHERE EmailID = '{row['EmailID']}';
-    """)
-    CONN.execute(query)
-df.apply(update_row, axis=1)
-
-# Update Status
-query = text(f"""
-    UPDATE {STATUS_TABLE}
-    SET Status = 'NLP FINISHED'
-    WHERE Reference IN {tuple(df['EmailID'].to_list())};
-""")
-CONN.execute(query)
-
-time.sleep(3)
-
-query = text(f"""
-    UPDATE {STATUS_TABLE}
-    SET Status = 'NLP FAILED'
-    WHERE Status = 'NLP IN PROGRESS';
-""")
-CONN.execute(query)
-'''

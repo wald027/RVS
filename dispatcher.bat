@@ -1,2 +1,3 @@
 @echo off
-python -u "realvidaseguros\IntelligentProcessAutomationNLP\Dispatcher.py"
+python -u "IntelligentProcessAutomationNLP\Dispatcher.py"
+pause
