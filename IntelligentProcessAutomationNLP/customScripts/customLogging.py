@@ -38,13 +38,12 @@ class CustomFormatter(logging.Formatter):
             record.robot = f'{os.environ["COMPUTERNAME"]}_{os.getlogin()}'  # Hardcoded robot
         return super().format(record)
     
-def setup_logging(db,table,nomeprocesso):
-    #Handler Base de Dados
-    #logger = logging.Logger('RealVidaSeguros')
+def setup_logging() -> logging.Logger:
+
+    os.makedirs('Logs', exist_ok=True)
+
     logger = logging.getLogger('RealVidaSeguros')
     logger.setLevel(logging.DEBUG)
-    Customhandler = CustomHandler(db,table,nomeprocesso)
-    logger.addHandler(Customhandler)
     
     #Handler para os logs aparecerem na consola (talvez desativar em producao)
     formatter = CustomFormatter('%(asctime)s | %(levelname)s | %(robot)s | %(filename)s | %(funcName)s - %(message)s')
@@ -54,17 +53,30 @@ def setup_logging(db,table,nomeprocesso):
     logger.addHandler(console_handler)
     
     #Handler de INFO level logs
-    file_handler_info = logging.FileHandler(f'Logs\Info_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt', encoding='utf-8')
+    file_handler_info = logging.FileHandler(f'Logs\Info_Logs_ObterEmails_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt', encoding='utf-8')
     file_handler_info.setLevel(logging.INFO)
     file_handler_info.setFormatter(formatter)
     logger.addHandler(file_handler_info)
 
     #Handler de Debug level logs
-    file_handler_debug = logging.FileHandler(f'Logs\Debug_Logs_{nomeprocesso}_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt',encoding='utf-8')
+    file_handler_debug = logging.FileHandler(f'Logs\Debug_Logs_ObterEmails_{datetime.datetime.now().strftime("%d%m%Y_%H%M%S")}.txt',encoding='utf-8')
     file_handler_debug.setLevel(logging.DEBUG)
     file_handler_debug.setFormatter(formatter)
     logger.addHandler(file_handler_debug)
 
     logger.addFilter(CustomFilter())
+
+    #logger.debug("Logging para consola e ficheiros txt inicializado.")
+
+    return logger
+
+def setup_logging_db(db,table,nomeprocesso)-> logging.Logger:
+    #Inicializa os logs para a base dados
+    logger = logging.getLogger('RealVidaSeguros')
+    logger.setLevel(logging.DEBUG)
+    Customhandler = CustomHandler(db,table,nomeprocesso)
+    logger.addHandler(Customhandler)
+
+    #logger.debug("Logging connectado com a base de dados!")
 
     return logger

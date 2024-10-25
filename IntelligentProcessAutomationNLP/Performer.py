@@ -2,10 +2,12 @@ from Automation.GIO import *
 from customScripts.readConfig import *
 import customScripts.databaseSQLExpress as databaseSQLExpress
 from Automation.BusinessRuleExceptions import BusinessRuleException
-from customScripts.customLogging import setup_logging
+from customScripts.customLogging import setup_logging,setup_logging_db
 from datetime import datetime, timedelta
 from Automation.MailboxRVS import SendEmail as SendOutlookMail
 import subprocess
+
+PATH_CONFIG = r'Config.xlsx'
 
 COLUMN_NAMES = [
     'EmailRemetente','DataEmail','Anexos','EmailID','Subject','Body',
@@ -13,13 +15,15 @@ COLUMN_NAMES = [
 ]
 
 def main():
+    #Iniciar Logger e Leitura de COnfigurações 
+    logger = setup_logging()
+    logger.debug(f"A tentar ler ficheiro de Configuração...")
     try:
-        dictConfig = readConfig(r'Config.xlsx')
+        dictConfig = readConfig(PATH_CONFIG)
+        logger.info("Ficheiro de Configuração lido com Sucesso!")
     except Exception as e:
-        print(f'Erro ao tentar ler a Config.xlsx, {e}')
-        #logger = logging.getLogger(__name__)
-        #logger.info(f'Erro ao tentar ler a Config.xlsx, {e}')
-        raise e
+        logger.error(f"Erro ao ler ficheiro de configuração - {e}")
+        raise Exception("Erro ao ler ficheiro de Configuração.")
     server = queryByNameDict('SQLExpressServer',dictConfig)
     database = queryByNameDict('Database',dictConfig)
     db = databaseSQLExpress.ConnectToBD(server,database)
@@ -27,12 +31,20 @@ def main():
     databaseLogsTable=queryByNameDict('LogsTableName',dictConfig)
     tabelaPedidos =queryByNameDict('TableName',dictConfig)
     queueItem =queryByNameDict('QueueTableName',dictConfig)
-    logger = setup_logging(db,databaseLogsTable,nomeprocesso)
+    try:
+        logger.debug("A tentar estabelecer conexão com a base de dados...")
+        db = databaseSQLExpress.ConnectToBD(server,database)
+        logger = setup_logging_db(db,databaseLogsTable,nomeprocesso)
+        logger.info("Ligação com a base de dados estabelecida com Sucesso!")
+    except Exception as e:
+        logger.error(f"Erro ao estabelecer conexão com a base de dados - {e}")
+        raise Exception("Erro ao estabelecer conexão com a base de dados.")
     logger.info("A Iniciar Performer.....")
     mailboxname = queryByNameDict('MailboxName',dictConfig)
     pastaEmailsTratamento = queryByNameDict('EmailsToMove',dictConfig)
     pastaEmailsTratamentoManual = queryByNameDict('EmailTratamentoManualMove',dictConfig) 
     pastaEmailsSucesso = queryByNameDict('EmailSucessoMove',dictConfig)
+    #Iniciar Perfomer (Abrir Aplicações,etc)
     try:
         for app in queryByNameDict('AplicacoesPerf',dictConfig).split(','):
             KillAllApplication(app+'.exe',logger)
@@ -46,6 +58,7 @@ def main():
         logger.error(f"Erro ao iniciar Aplicações {e}")
         SendOutlookMail(logger,(queryByNameDict('EM01_Body',dictConfig)).replace('[E]',str(e)),queryByNameDict('EM01_Subject',dictConfig),queryByNameDict('EM01_To',dictConfig))
         raise e
+    #Enquanto Exisit QueueItems Processar
     while True:
         dfQueueItem:pd.DataFrame
         try:
@@ -199,7 +212,9 @@ def main():
             logger.info("Sem QueueItems para tratar.")    
             break
     #print(dfReportOutput)
-    file_path = f'Output\Output_Pedidos_de_Clientes_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
+    pathOutput = queryByNameDict("pathOutput",dictConfig)
+    os.makedirs(pathOutput, exist_ok=True)
+    file_path = f'{pathOutput}Output_Pedidos_de_Clientes_{datetime.now().strftime("%d%m%Y_%H%M%S")}.xlsx'
     dfReportOutput.drop(columns='TemaReal').to_excel(file_path, index=False, header=True)
     databaseSQLExpress.SetReportOutput(db,'Report_Output',dfReportOutput.drop(columns='TemaReal'))
     body = queryByNameDict('EM02_Body',dictConfig).replace('[A]',str(len(dfReportOutput))).replace('[B]',str((dfReportOutput[dfReportOutput['Estado']=='Processado'].shape[0]))).replace('[C]',str((dfReportOutput[dfReportOutput['Estado'] != 'Processado'].shape[0]))).replace('[D]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '0')].shape[0]))).replace('[E]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '1')].shape[0]))).replace('[F]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '2')].shape[0]))).replace('[G]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'].isin(['3', '3NA']))].shape[0]))).replace('[H]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '5')].shape[0]))).replace('[I]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '6')].shape[0]))).replace('[J]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '7')].shape[0]))).replace('[K]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '8')].shape[0]))).replace('[L]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '9')].shape[0]))).replace('[M]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == '10')].shape[0]))).replace('[N]',str((dfReportOutput[(dfReportOutput['Estado'] == 'Processado') & (dfReportOutput['TemaReal'] == 'NA')].shape[0])))
@@ -218,7 +233,7 @@ def InitApplications(dictConfig):
     outlook.window(title_re=".*Inbox.*").minimize()
     chrome_path = queryByNameDict('ChromePath',dictConfig)
     urlGIO = queryByNameDict('LinkGIO',dictConfig)
-    arguments = fr"--remote-debugging-port=9222 --user-data-dir=C:\selenium\chrome-profile --url {urlGIO} --headless"
+    arguments = fr"--remote-debugging-port=9222 --user-data-dir=C:\selenium\chrome-profile --url {urlGIO} "
     subprocess.Popen([chrome_path] + arguments.split())
     #os.system(r"startChrome.bat")
     Browser_options = Options()

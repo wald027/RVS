@@ -31,7 +31,7 @@ class EmailClassifier:
         """
         # Query para selecionar os e-mails com status 'NLP'
         df = pd.read_sql_query(query, con=self.engine) # Executa a consulta SQL e carrega os resultados em um DataFrame
-        self.logger.debug(df) # Log dos dados carregados
+        #self.logger.debug(df) # Log dos dados carregados
         self.logger.info("LOADED - emails data.") # Log informando que os dados foram carregados
 
 

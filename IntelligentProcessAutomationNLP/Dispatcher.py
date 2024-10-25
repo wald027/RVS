@@ -26,32 +26,46 @@ COLUMN_NAMES = [
 ]
 
 def main():
-    #iniciar database, custom logger
-    dictConfig = readConfig.readConfig(PATH_CONFIG)
-    Debug = readConfig.queryByNameDict('Teste_Dispatcher_NLP',dictConfig)
-    server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
-    database = readConfig.queryByNameDict('Database',dictConfig)
-    db = databaseSQLExpress.ConnectToBD(server,database)
-    driver = readConfig.queryByNameDict('SQLDriver',dictConfig)
-    if Debug:#Exec de Teste 
-        databaseLogsTable=readConfig.queryByNameDict('LogsTableName_Teste',dictConfig)
-        STATUS_TABLE = readConfig.queryByNameDict('QueueTableName_Teste',dictConfig)
-        EMAIL_TABLE = readConfig.queryByNameDict('TableName_Teste',dictConfig)
-    else:#Exec Normal
-        databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
-        STATUS_TABLE = readConfig.queryByNameDict('QueueTableName',dictConfig)
-        EMAIL_TABLE = readConfig.queryByNameDict('TableName',dictConfig)
-
-    nomeprocesso = readConfig.queryByNameDict('NomeProcesso',dictConfig)
-    BASE_DIR = readConfig.queryByNameDict('Base_Dir',dictConfig)
-    NUM_LABELS = readConfig.queryByNameDict('NumLabelsNLP',dictConfig)
-    #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
-    intencoes_filepath = readConfig.queryByNameDict('PathConfigIntencoes',dictConfig)
-    dfDict = pd.read_excel(intencoes_filepath,sheet_name='LabelMap')
-    label_map = dict(zip(dfDict['Key'].astype(str), dfDict['Value'].astype(str)))
-
-    logger = customLogging.setup_logging(db,databaseLogsTable,nomeprocesso)
     try:
+        logger = customLogging.setup_logging()
+        logger.debug(f"A tentar ler ficheiro de Configuração...")
+        try:
+            dictConfig = readConfig.readConfig(PATH_CONFIG)
+            logger.info("Ficheiro de Configuração lido com Sucesso!")
+        except Exception as e:
+            logger.error(f"Erro ao ler ficheiro de configuração - {e}")
+            raise Exception("Erro ao ler ficheiro de Configuração.")
+        #iniciar database, custom logger
+        Debug = readConfig.queryByNameDict('Teste_Dispatcher_NLP',dictConfig)
+        server = readConfig.queryByNameDict('SQLExpressServer',dictConfig)
+        database = readConfig.queryByNameDict('Database',dictConfig)
+        db = databaseSQLExpress.ConnectToBD(server,database)
+        driver = readConfig.queryByNameDict('SQLDriver',dictConfig)
+        if Debug:#Exec de Teste 
+            databaseLogsTable=readConfig.queryByNameDict('LogsTableName_Teste',dictConfig)
+            STATUS_TABLE = readConfig.queryByNameDict('QueueTableName_Teste',dictConfig)
+            EMAIL_TABLE = readConfig.queryByNameDict('TableName_Teste',dictConfig)
+        else:#Exec Normal
+            databaseLogsTable=readConfig.queryByNameDict('LogsTableName',dictConfig)
+            STATUS_TABLE = readConfig.queryByNameDict('QueueTableName',dictConfig)
+            EMAIL_TABLE = readConfig.queryByNameDict('TableName',dictConfig)
+
+        nomeprocesso = readConfig.queryByNameDict('NomeProcesso',dictConfig)
+        BASE_DIR = readConfig.queryByNameDict('Base_Dir',dictConfig)
+        NUM_LABELS = readConfig.queryByNameDict('NumLabelsNLP',dictConfig)
+        #TOKENIZER_PATH = readConfig.queryByNameDict('TokenizerPath',dictConfig)
+        intencoes_filepath = readConfig.queryByNameDict('PathConfigIntencoes',dictConfig)
+        dfDict = pd.read_excel(intencoes_filepath,sheet_name='LabelMap')
+        label_map = dict(zip(dfDict['Key'].astype(str), dfDict['Value'].astype(str)))
+        try:
+            logger.debug("A tentar estabelecer conexão com a base de dados...")
+            db = databaseSQLExpress.ConnectToBD(server,database)
+            logger = customLogging.setup_logging_db(db,databaseLogsTable,nomeprocesso)
+            logger.info("Ligação com a base de dados estabelecida com Sucesso!")
+        except Exception as e:
+            logger.error(f"Erro ao estabelecer conexão com a base de dados - {e}")
+            raise Exception("Erro ao estabelecer conexão com a base de dados.")
+  
         #logger = logging.getLogger(__name__)
         if Debug:
             logger.warning('O DISPATCHER ESTÁ A EXECUTAR EM MODO TESTE')
